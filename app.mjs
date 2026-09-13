@@ -3,7 +3,7 @@
 async function main() {
   try {
     const reply = await getReply();
-    console.log("Ответ:", reply);
+    console.log("Ответ от AI:", reply);
   } catch (error) {
     console.log("Не удалось получить ответ:", error.message);
   }
