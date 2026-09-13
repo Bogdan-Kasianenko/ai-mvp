@@ -10,3 +10,5 @@ async function main() {
 }
 
 main();
+
+console.log("Testing new feature");
