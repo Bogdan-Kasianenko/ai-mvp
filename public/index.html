@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI asistent autoservisu — demo</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <span class="badge">TESTOVACÍ VERZE</span>
+    <h1>AI asistent autoservisu</h1>
+    <p>Odpovědi bude vytvářet umělá inteligence na základě informací poskytnutých autoservisem. AI zatím není připojena; nyní ověřujeme výměnu zpráv se serverem.</p>
+    <section aria-labelledby="chat-heading">
+      <h2 id="chat-heading">Testovací chat</h2>
+      <div id="messages" aria-label="Zprávy" aria-live="polite"></div>
+      <form id="chat-form">
+        <label for="message">Vaše zpráva</label>
+        <textarea id="message" name="message" rows="3" maxlength="1000" required placeholder="Napište testovací zprávu…"></textarea>
+        <button id="send" type="submit">Odeslat zprávu</button>
+      </form>
+      <p id="request-status" role="status"></p>
+    </section>
+    <p class="note">Testovací verze. Nezadávejte jméno, telefon ani jiné osobní údaje. Zprávy se neukládají.</p>
+  </main>
+</body>
+</html>

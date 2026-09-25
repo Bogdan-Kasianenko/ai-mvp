@@ -1,0 +1,19 @@
+:root { font-family: system-ui, sans-serif; color: #172c38; background: #f1f5f4; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 64px 20px; }
+main { max-width: 720px; margin: auto; }
+h1 { font-size: clamp(2rem, 6vw, 3rem); letter-spacing: -.04em; margin-bottom: 16px; }
+p { line-height: 1.7; }
+.badge { color: #176252; font-size: .75rem; font-weight: 700; letter-spacing: .14em; }
+section { background: white; padding: 28px; border: 1px solid #d9e3df; border-radius: 16px; margin-top: 32px; }
+h2 { font-size: 1.2rem; margin-top: 0; }
+#messages { min-height: 90px; padding: 8px 0; }
+#messages p { background: #f1f5f4; border-radius: 8px; padding: 10px 14px; margin: 8px 0; overflow-wrap: anywhere; }
+form { display: grid; gap: 12px; }
+label { font-weight: 600; }
+textarea { width: 100%; padding: 12px; border: 1px solid #9db4ad; border-radius: 8px; font: inherit; resize: vertical; }
+button { justify-self: start; background: #176252; color: white; border: 0; padding: 12px 18px; border-radius: 8px; cursor: pointer; font: inherit; }
+button:disabled { opacity: .6; cursor: wait; }
+button:focus-visible, textarea:focus-visible { outline: 3px solid #b28215; outline-offset: 3px; }
+#request-status { min-height: 1.5em; }
+.note { font-size: .875rem; color: #53666e; }
