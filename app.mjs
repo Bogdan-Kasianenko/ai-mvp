@@ -1,3 +1,4 @@
+import { getReply } from "./service.mjs";
 import express from "express";
 import { fileURLToPath } from "node:url";
 
@@ -13,13 +14,21 @@ app.get("/api/health", (request, response) => {
   response.json({ status: "ok" });
 });
 
-app.post("/api/chat", (request, response) => {
+app.post("/api/chat", async (request, response) => {
   const message = request.body?.message;
-  if (typeof message !== "string" || message.trim().length === 0 || message.length > 1000) {
-    return response.status(400).json({ error: "Zadejte zprávu o délce 1 až 1000 znaků." });
+
+  if (
+    typeof message !== "string" ||
+    message.trim().length === 0 ||
+    message.length > 1000
+  ) {
+    return response.status(400).json({
+      error: "Zadejte zprávu o délce 1 až 1000 znaků."
+    });
   }
 
-  return response.json({ reply: "Zpráva dorazila na server. AI zatím není připojena." });
+  const reply = await getReply(message);
+  return response.json({ reply });
 });
 
 app.use((error, request, response, next) => {
