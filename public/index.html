@@ -4,6 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AI asistent autoservisu — demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Jost:wght@400;700&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
   <script src="/app.js" defer></script>
 </head>
@@ -11,17 +15,66 @@
   <main>
     <span class="badge">TESTOVACÍ VERZE</span>
     <h1>AI asistent autoservisu</h1>
-    <p>Odpovědi bude vytvářet umělá inteligence na základě informací poskytnutých autoservisem. AI zatím není připojena; nyní ověřujeme výměnu zpráv se serverem.</p>
-    <section aria-labelledby="chat-heading">
-      <h2 id="chat-heading">Testovací chat</h2>
-      <div id="messages" aria-label="Zprávy" aria-live="polite"></div>
-      <form id="chat-form">
-        <label for="message">Vaše zpráva</label>
-        <textarea id="message" name="message" rows="3" maxlength="1000" required placeholder="Napište testovací zprávu…"></textarea>
-        <button id="send" type="submit">Odeslat zprávu</button>
-      </form>
-      <p id="request-status" role="status"></p>
-    </section>
+    <p>Testovací verze AI asistenta. Údaje autoservisu jsou zatím ukázkové a odpovědi AI mohou být dočasně nedostupné.</p>
+ <section aria-labelledby="company-heading">
+  <h2 id="company-heading">Informace o autoservisu</h2>
+  <p id="company-name">Načítání...</p>
+  <ul id="company-services"></ul>
+</section>
+    <div class="chat-prompt" id="chat-prompt">
+  <span>↘ Klikněte a zeptejte se na své auto</span>
+  <button id="chat-open" type="button">Otevřít chat</button>
+</div>
+
+<section id="chat-panel" aria-labelledby="chat-heading" hidden>
+<div class="chat-toolbar">
+  <div class="chat-toolbar-inner">
+    <button id="chat-expand" type="button" aria-label="Zvětšit chat" >
+      <span class="chat-control-face">
+        <svg viewBox="0 0 30 30" aria-hidden="true">
+          <path d="M13 13 5 5M5 12V5h7M17 17l8 8m-7 0h7v-7" />
+        </svg>
+      </span>
+    </button>
+
+    <div class="chat-toolbar-actions">
+      <button id="chat-close" type="button" aria-label="Zavřít chat">
+        <span class="chat-control-face">
+          <svg viewBox="0 0 30 30" aria-hidden="true">
+            <path d="m6 11 9 9 9-9" />
+          </svg>
+        </span>
+      </button>
+    </div>
+  </div>
+</div>
+
+  <div class="chat-header">
+  <div class="chat-header-inner">
+    <div class="chat-logo">
+      <img src="/auto-uh-logo.png.png" alt="Auto UH.cz">
+    </div>
+
+    <div class="chat-header-text">
+      <h2 id="chat-heading">Zeptejte se na své auto</h2>
+      <p>Odpoví vám AI asistent.</p>
+    </div>
+  </div>
+</div>
+
+  <div id="messages" aria-label="Zprávy" aria-live="polite"></div>
+
+  <form id="chat-form">
+  <label for="message">Vaše zpráva</label>
+  <div class="message-box">
+    <textarea id="message" name="message" rows="1" maxlength="1000"
+      required placeholder="Co se děje s vaším autem?"></textarea>
+    <button id="send" type="submit"><span>ODESLAT</span></button>
+  </div>
+</form>
+
+  <p id="request-status" role="status"></p>
+</section>
     <p class="note">Testovací verze. Nezadávejte jméno, telefon ani jiné osobní údaje. Zprávy se neukládají.</p>
   </main>
 </body>

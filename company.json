@@ -1,0 +1,9 @@
+{
+  "name": "Demo autoservis",
+  "services": [
+    {
+      "name": "Diagnostika",
+      "price": null
+    }
+  ]
+}

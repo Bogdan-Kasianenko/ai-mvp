@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { getReply } from "./service.mjs";
 import express from "express";
 import { fileURLToPath } from "node:url";
@@ -10,8 +11,19 @@ app.disable("x-powered-by");
 app.use(express.static(publicDirectory));
 app.use("/api", express.json({ limit: "8kb" }));
 
+async function loadCompanyData() {
+  const file = new URL("./company.json", import.meta.url);
+  const text = await readFile(file, "utf8");
+  return JSON.parse(text);
+}
+
 app.get("/api/health", (request, response) => {
   response.json({ status: "ok" });
+});
+
+app.get("/api/company", async (request, response) => {
+ const company = await loadCompanyData();
+  response.json(company);
 });
 
 app.post("/api/chat", async (request, response) => {
@@ -27,7 +39,8 @@ app.post("/api/chat", async (request, response) => {
     });
   }
 
-  const reply = await getReply(message);
+ const company = await loadCompanyData();
+const reply = await getReply(message, company);
   return response.json({ reply });
 });
 
@@ -38,6 +51,12 @@ app.use((error, request, response, next) => {
   if (error.type === "entity.too.large") {
     return response.status(413).json({ error: "Zpráva je příliš dlouhá." });
   }
+  if (error.status === 429) {
+  console.error("AI request unavailable:", error.message);
+  return response.status(503).json({
+    error: "AI asistent je dočasně nedostupný. Zkuste to prosím později."
+  });
+}
   console.error("Request failed:", error.message);
   return response.status(500).json({ error: "Požadavek se nepodařilo zpracovat." });
 });
