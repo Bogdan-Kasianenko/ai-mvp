@@ -21,21 +21,55 @@ try {
 }
 
 const CHAT_UI_KEY = "autoservice-chat-ui-v1";
+const CHAT_OPEN_KEY = "autoservice-chat-open-v1";
+const CHAT_EXPANDED_KEY = "autoservice-chat-expanded-v1";
 const chatUiState = { open: false, expanded: false };
+let oldChatUiState = null;
 
 try {
-  const saved = JSON.parse(localStorage.getItem(CHAT_UI_KEY) || "null");
-  if (saved && typeof saved === "object") {
-    chatUiState.open = saved.open === true;
-    chatUiState.expanded = saved.expanded === true;
-  }
+  oldChatUiState = JSON.parse(localStorage.getItem(CHAT_UI_KEY) || "null");
 } catch {
-  // Если сохранённое состояние повреждено, используем обычный закрытый чат.
+  // Повреждённая старая настройка не мешает читать новые настройки.
 }
 
-function saveChatUiState() {
+try {
+  const savedOpen = sessionStorage.getItem(CHAT_OPEN_KEY);
+  if (savedOpen !== null) {
+    chatUiState.open = savedOpen === "true";
+  } else if (typeof oldChatUiState?.open === "boolean") {
+    chatUiState.open = oldChatUiState.open;
+    sessionStorage.setItem(CHAT_OPEN_KEY, String(chatUiState.open));
+  }
+} catch {
+  // Если хранилище вкладки недоступно, чат начнёт с закрытого состояния.
+}
+
+try {
+  const savedExpanded = localStorage.getItem(CHAT_EXPANDED_KEY);
+  if (savedExpanded !== null) {
+    chatUiState.expanded = savedExpanded === "true";
+  } else if (typeof oldChatUiState?.expanded === "boolean") {
+    chatUiState.expanded = oldChatUiState.expanded;
+    localStorage.setItem(CHAT_EXPANDED_KEY, String(chatUiState.expanded));
+  }
+  if (sessionStorage.getItem(CHAT_OPEN_KEY) !== null) {
+    localStorage.removeItem(CHAT_UI_KEY);
+  }
+} catch {
+  // Чат продолжит работать, даже если браузер запретил сохранение.
+}
+
+function saveChatOpenState() {
   try {
-    localStorage.setItem(CHAT_UI_KEY, JSON.stringify(chatUiState));
+    sessionStorage.setItem(CHAT_OPEN_KEY, String(chatUiState.open));
+  } catch {
+    // Чат продолжит работать, даже если браузер запретил сохранение.
+  }
+}
+
+function saveChatExpandedState() {
+  try {
+    localStorage.setItem(CHAT_EXPANDED_KEY, String(chatUiState.expanded));
   } catch {
     // Чат продолжит работать, даже если браузер запретил сохранение.
   }
@@ -256,7 +290,7 @@ chatOpen.addEventListener("click", () => {
   chatPanel.hidden = false;
   chatPrompt.hidden = true;
   chatUiState.open = true;
-  saveChatUiState();
+  saveChatOpenState();
   chatPrompt.classList.remove("is-first-visit");
   chatHint.hidden = true;
   chatOpenText.textContent = "Váš AI asistent";
@@ -307,7 +341,7 @@ chatClose.addEventListener("click", async () => {
   if (chatIsClosing) return;
   chatIsClosing = true;
   chatUiState.open = false;
-  saveChatUiState();
+  saveChatOpenState();
 
   if (!chatMotionReduced.matches) {
     const animation = chatPanel.animate(
@@ -351,7 +385,13 @@ chatExpand.addEventListener("click", () => {
   const expanded = !chatPanel.classList.contains("is-expanded");
   setChatExpanded(expanded);
   chatUiState.expanded = expanded;
-  saveChatUiState();
+  saveChatExpandedState();
+});
+
+window.addEventListener("storage", (event) => {
+  if (event.key !== CHAT_EXPANDED_KEY) return;
+  chatUiState.expanded = event.newValue === "true";
+  setChatExpanded(chatUiState.expanded);
 });
 
 function scrollMessagesToBottom() {
