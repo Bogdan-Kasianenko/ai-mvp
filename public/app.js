@@ -20,6 +20,27 @@ try {
   // Если хранилище браузера недоступно, показываем обычную кнопку.
 }
 
+const CHAT_UI_KEY = "autoservice-chat-ui-v1";
+const chatUiState = { open: false, expanded: false };
+
+try {
+  const saved = JSON.parse(localStorage.getItem(CHAT_UI_KEY) || "null");
+  if (saved && typeof saved === "object") {
+    chatUiState.open = saved.open === true;
+    chatUiState.expanded = saved.expanded === true;
+  }
+} catch {
+  // Если сохранённое состояние повреждено, используем обычный закрытый чат.
+}
+
+function saveChatUiState() {
+  try {
+    localStorage.setItem(CHAT_UI_KEY, JSON.stringify(chatUiState));
+  } catch {
+    // Чат продолжит работать, даже если браузер запретил сохранение.
+  }
+}
+
 let isAiTyping = false;
 let unreadCount = 0;
 
@@ -33,6 +54,61 @@ function updateLauncherStatus() {
   launcherTyping.hidden = !chatPanel.hidden || !isAiTyping;
   unreadBadge.hidden = unreadCount === 0;
   unreadBadge.textContent = String(unreadCount);
+}
+
+const CHAT_HISTORY_KEY = "autoservice-chat-history-v1";
+const MAX_SAVED_MESSAGES = 50;
+let chatHistory = [];
+
+try {
+  const saved = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
+
+  if (Array.isArray(saved)) {
+    chatHistory = saved.filter((entry) =>
+      entry &&
+      ["user", "assistant", "error", "welcome"].includes(entry.role) &&
+      typeof entry.content === "string" &&
+      entry.content.trim().length > 0 &&
+      entry.content.length <= 20000 &&
+      typeof entry.at === "string" &&
+      !Number.isNaN(Date.parse(entry.at))
+    ).slice(-MAX_SAVED_MESSAGES);
+  }
+} catch {
+  chatHistory = [];
+}
+
+function rememberMessage(role, content, at = new Date().toISOString()) {
+  chatHistory.push({
+    role,
+    content,
+    at
+  });
+  chatHistory = chatHistory.slice(-MAX_SAVED_MESSAGES);
+
+  try {
+    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chatHistory));
+  } catch {
+    // Чат продолжит работать, даже если браузер запретил сохранение.
+  }
+}
+
+function getRecentContext() {
+  const context = [];
+  let totalLength = 0;
+
+  for (let i = chatHistory.length - 1; i >= 0 && context.length < 12; i--) {
+    const entry = chatHistory[i];
+    if (entry.role !== "user" && entry.role !== "assistant") continue;
+
+    const content = entry.content.slice(0, 2000);
+    if (totalLength + content.length > 12000) break;
+
+    context.unshift({ role: entry.role, content });
+    totalLength += content.length;
+  }
+
+  return context;
 }
 
 function resizeMessageInput() {
@@ -52,37 +128,91 @@ input.addEventListener("keydown", (event) => {
   if (!sendButton.disabled) form.requestSubmit(sendButton);
 });
 
+const chatMotionReduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+let chatIsClosing = false;
+
 chatOpen.addEventListener("click", () => {
   chatPanel.hidden = false;
   chatPrompt.hidden = true;
+  chatUiState.open = true;
+  saveChatUiState();
   chatPrompt.classList.remove("is-first-visit");
-chatHint.hidden = true;
-chatOpenText.textContent = "Váš AI asistent";
-unreadCount = 0;
-updateLauncherStatus();
-    showWelcomeMessage();
+  chatHint.hidden = true;
+  chatOpenText.textContent = "Váš AI asistent";
+  unreadCount = 0;
+  updateLauncherStatus();
+
+  const hadMessages = messages.childElementCount > 0;
+  showWelcomeMessage();
+
+  if (!chatMotionReduced.matches) {
+    chatPanel.animate(
+      [
+        { opacity: 0, transform: "translateY(20px)" },
+        { opacity: 1, transform: "translateY(0)" }
+      ],
+      { duration: 420, easing: "cubic-bezier(.22, 1, .36, 1)" }
+    );
+  }
+
+  requestAnimationFrame(() => {
+    messages.scrollTop = messages.scrollHeight;
+
+    if (!hadMessages || chatMotionReduced.matches) return;
+
+    const recentRows = [...messages.querySelectorAll(".chat-message")].slice(-5);
+
+    recentRows.forEach((row, index) => {
+      row.animate(
+        [
+          { opacity: 0, transform: "translateY(10px)" },
+          { opacity: 1, transform: "translateY(0)" }
+        ],
+        {
+          duration: 340,
+          delay: index * 45,
+          easing: "cubic-bezier(.22, 1, .36, 1)",
+          fill: "backwards"
+        }
+      );
+    });
+  });
   input.focus();
 });
 
 const chatExpand = document.querySelector("#chat-expand");
-chatClose.addEventListener("click", () => {
-  chatPanel.hidden = true;
+
+chatClose.addEventListener("click", async () => {
+  if (chatIsClosing) return;
+  chatIsClosing = true;
+  chatUiState.open = false;
+  saveChatUiState();
+
+  if (!chatMotionReduced.matches) {
+    const animation = chatPanel.animate(
+      [
+        { opacity: 1, transform: "translateY(0)" },
+        { opacity: 0, transform: "translateY(18px)" }
+      ],
+      { duration: 190, easing: "ease-in", fill: "forwards" }
+    );
+
+    await animation.finished;
+    chatPanel.hidden = true;
+    animation.cancel();
+  } else {
+    chatPanel.hidden = true;
+  }
+
+  chatPrompt.classList.add("is-returning");
   chatPrompt.hidden = false;
   updateLauncherStatus();
   chatOpen.focus();
+  chatIsClosing = false;
 });
 
-if (isFirstVisit) {
-  setTimeout(() => {
-    if (chatPanel.hidden) chatPrompt.hidden = false;
-  }, 2500);
-} else {
-  chatPrompt.hidden = false;
-}
-
-chatExpand.addEventListener("click", () => {
-  const expanded = chatPanel.classList.toggle("is-expanded");
-
+function setChatExpanded(expanded) {
+  chatPanel.classList.toggle("is-expanded", expanded);
   chatExpand.setAttribute(
     "aria-label",
     expanded ? "Zmenšit chat" : "Zvětšit chat"
@@ -94,6 +224,13 @@ chatExpand.addEventListener("click", () => {
       ? "M5 5l8 8m0-7v7H6M25 25l-8-8m0 7v-7h7"
       : "M13 13 5 5M5 12V5h7M17 17l8 8m-7 0h7v-7"
   );
+}
+
+chatExpand.addEventListener("click", () => {
+  const expanded = !chatPanel.classList.contains("is-expanded");
+  setChatExpanded(expanded);
+  chatUiState.expanded = expanded;
+  saveChatUiState();
 });
 
 function scrollMessagesToBottom() {
@@ -105,14 +242,15 @@ function scrollMessagesToBottom() {
   });
 }
 
-function showMessage(author, text) {
+function showMessage(author, text, at = new Date().toISOString(), restored = false) {
   const isUser = author === "Vy";
   const isNearBottom =
     messages.scrollHeight - messages.scrollTop - messages.clientHeight < 96;
   const row = document.createElement("div");
   row.className = `chat-message ${isUser ? "chat-message--user" : "chat-message--ai"}`;
+  if (restored) row.classList.add("chat-message--restored");
 
-    const avatar = document.createElement("span");
+  const avatar = document.createElement("span");
   avatar.className = "chat-message__avatar";
   avatar.setAttribute("aria-hidden", "true");
 
@@ -126,8 +264,8 @@ function showMessage(author, text) {
   name.textContent = author;
 
   const time = document.createElement("time");
-  const now = new Date();
-  time.dateTime = now.toISOString();
+  const now = new Date(at);
+  time.dateTime = at;
   time.textContent = now.toLocaleTimeString("cs-CZ", {
     hour: "2-digit",
     minute: "2-digit"
@@ -137,14 +275,14 @@ function showMessage(author, text) {
   content.className = "chat-message__text";
   content.textContent = text;
 
-   meta.append(name, time);
+  meta.append(name, time);
   bubble.append(content);
 
   const body = document.createElement("div");
   body.className = "chat-message__body";
   body.append(meta, bubble);
 
-   if (isUser) {
+  if (isUser) {
     row.append(body);
   } else {
     row.append(avatar, body);
@@ -152,7 +290,7 @@ function showMessage(author, text) {
 
   messages.append(row);
 
-  if (isUser || isNearBottom) {
+  if (!restored && (isUser || isNearBottom)) {
     requestAnimationFrame(scrollMessagesToBottom);
   }
 
@@ -244,17 +382,17 @@ function showWelcomeMessage() {
 
   sendButton.disabled = true;
   isAiTyping = true;
-updateLauncherStatus();
+  updateLauncherStatus();
   const row = showTypingMessage();
 
   setTimeout(() => {
-    finishTypingMessage(
-      row,
-      "Dobrý den! 👋 S čím vám mohu pomoci? Napište mi, co se děje s vaším autem, nebo se zeptejte na služby, ceny či možnosti online objednání do servisu."
-    );
+    const welcomeText = "Dobrý den! 👋 S čím vám mohu pomoci? Napište mi, co se děje s vaším autem, nebo se zeptejte na služby, ceny či možnosti online objednání do servisu.";
+    finishTypingMessage(row, welcomeText);
+    rememberMessage("welcome", welcomeText, row.querySelector("time").dateTime);
+
     isAiTyping = false;
-if (chatPanel.hidden) unreadCount += 1;
-updateLauncherStatus();
+    if (chatPanel.hidden) unreadCount += 1;
+    updateLauncherStatus();
     sendButton.disabled = false;
   }, 2000);
 }
@@ -270,11 +408,13 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
-    sendButton.disabled = true;
-    isAiTyping = true;
-updateLauncherStatus();
+  const history = getRecentContext();
+  sendButton.disabled = true;
+  isAiTyping = true;
+  updateLauncherStatus();
   sendButton.classList.add("is-sending");
-  showMessage("Vy", message);
+  const userRow = showMessage("Vy", message);
+  rememberMessage("user", message, userRow.querySelector("time").dateTime);
   input.value = "";
   resizeMessageInput();
 
@@ -289,8 +429,9 @@ updateLauncherStatus();
 
   try {
     let reply;
+    let replyRole = "assistant";
 
-       try {
+    try {
       let response;
       let data;
 
@@ -298,7 +439,7 @@ updateLauncherStatus();
         response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify({ message, history }),
           signal: AbortSignal.timeout(30000)
         });
 
@@ -329,6 +470,7 @@ updateLauncherStatus();
 
       reply = data.reply;
     } catch (error) {
+      replyRole = "error";
       reply = error.message || "Zprávu se nepodařilo odeslat. Zkuste to znovu.";
     }
 
@@ -339,15 +481,24 @@ updateLauncherStatus();
     }
 
     finishTypingMessage(row, reply);
+    const replyTime = row.querySelector("time");
+    const now = new Date();
+    replyTime.dateTime = now.toISOString();
+    replyTime.textContent = now.toLocaleTimeString("cs-CZ", {
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+    rememberMessage(replyRole, reply, replyTime.dateTime);
     if (chatPanel.hidden) unreadCount += 1;
   } finally {
     isAiTyping = false;
-updateLauncherStatus();
+    updateLauncherStatus();
     sendButton.disabled = false;
     sendButton.classList.remove("is-sending");
     input.focus({ preventScroll: true });
   }
 });
+
 async function loadCompany() {
   const name = document.querySelector("#company-name");
   const services = document.querySelector("#company-services");
@@ -362,15 +513,41 @@ async function loadCompany() {
     for (const service of company.services) {
       const item = document.createElement("li");
       const price = service.price === null
-       ? "cena bude upřesněna"
+        ? "cena bude upřesněna"
         : `${service.price} Kč`;
 
       item.textContent = `${service.name} — ${price}`;
       services.append(item);
     }
   } catch {
-  name.textContent = "Nepodařilo se načíst údaje autoservisu.";
+    name.textContent = "Nepodařilo se načíst údaje autoservisu.";
+  }
 }
+
+for (const entry of chatHistory) {
+  const author = entry.role === "user" ? "Vy" : "AI asistent";
+  showMessage(author, entry.content, entry.at, true);
+}
+
+setChatExpanded(chatUiState.expanded);
+
+if (chatUiState.open) {
+  chatPanel.hidden = false;
+  chatPrompt.hidden = true;
+  chatPrompt.classList.remove("is-first-visit");
+  chatHint.hidden = true;
+  chatOpenText.textContent = "Váš AI asistent";
+  updateLauncherStatus();
+  showWelcomeMessage();
+  requestAnimationFrame(() => {
+    messages.scrollTop = messages.scrollHeight;
+  });
+} else if (isFirstVisit) {
+  setTimeout(() => {
+    if (chatPanel.hidden) chatPrompt.hidden = false;
+  }, 2500);
+} else {
+  chatPrompt.hidden = false;
 }
 
 loadCompany();

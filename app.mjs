@@ -11,7 +11,7 @@ const publicDirectory = fileURLToPath(new URL("./public/", import.meta.url));
 
 app.disable("x-powered-by");
 app.use(express.static(publicDirectory));
-app.use("/api", express.json({ limit: "8kb" }));
+app.use("/api", express.json({ limit: "64kb" }));
 
 async function loadCompanyData() {
   const file = new URL("./company.json", import.meta.url);
@@ -24,7 +24,7 @@ app.get("/api/health", (request, response) => {
 });
 
 app.get("/api/company", async (request, response) => {
- const company = await loadCompanyData();
+  const company = await loadCompanyData();
   response.json(company);
 });
 
@@ -41,8 +41,33 @@ app.post("/api/chat", async (request, response) => {
     });
   }
 
+  const history = request.body?.history ?? [];
+
+  const validHistory =
+    Array.isArray(history) &&
+    history.length <= 12 &&
+    history.every(
+      (item) =>
+        item &&
+        (item.role === "user" || item.role === "assistant") &&
+        typeof item.content === "string" &&
+        item.content.trim().length > 0 &&
+        item.content.length <= 2000
+    ) &&
+    history.reduce((total, item) => total + item.content.length, 0) <= 12000;
+
+  if (!validHistory) {
+    return response.status(400).json({
+      error: "Neplatná historie chatu."
+    });
+  }
+
+  const cleanHistory = history.map(({ role, content }) => ({
+    role,
+    content: content.trim()
+  }));
   const company = await loadCompanyData();
-  const reply = await getReply(message, company);
+  const reply = await getReply(message, company, cleanHistory);
 
   if (typeof reply !== "string" || !reply.trim()) {
     return response.status(502).json({
@@ -61,20 +86,20 @@ app.use((error, request, response, next) => {
     return response.status(413).json({ error: "Zpráva je příliš dlouhá." });
   }
   if (error instanceof APIConnectionTimeoutError) {
-   return response.status(503).json({
-    error: "AI asistent neodpovídá. Zkuste to prosím znovu."
-  });
-}
+    return response.status(503).json({
+      error: "AI asistent neodpovídá. Zkuste to prosím znovu."
+    });
+  }
   if (
-  error.status === 429 ||
-  error instanceof APIConnectionError ||
-  error instanceof InternalServerError
-) {
-  console.error("AI request unavailable:", error.message);
-  return response.status(503).json({
-    error: "AI asistent je dočasně nedostupný. Zkuste to prosím později."
-  });
-}
+    error.status === 429 ||
+    error instanceof APIConnectionError ||
+    error instanceof InternalServerError
+  ) {
+    console.error("AI request unavailable:", error.message);
+    return response.status(503).json({
+      error: "AI asistent je dočasně nedostupný. Zkuste to prosím později."
+    });
+  }
   console.error("Request failed:", error.message);
   return response.status(500).json({ error: "Požadavek se nepodařilo zpracovat." });
 });
