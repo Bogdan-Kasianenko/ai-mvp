@@ -21,9 +21,24 @@
   <p id="company-name">Načítání...</p>
   <ul id="company-services"></ul>
 </section>
-    <div class="chat-prompt" id="chat-prompt">
-  <span>↘ Klikněte a zeptejte se na své auto</span>
-  <button id="chat-open" type="button">Otevřít chat</button>
+<div class="chat-prompt" id="chat-prompt" hidden>
+  <span class="chat-prompt__hint" id="chat-launcher-hint">
+    Nevíte si rady s autem?
+  </span>
+
+  <span class="chat-prompt__typing" id="chat-launcher-typing"
+        role="status" aria-label="AI asistent píše" hidden>
+    <span aria-hidden="true"></span>
+    <span aria-hidden="true"></span>
+    <span aria-hidden="true"></span>
+  </span>
+
+  <div class="chat-open-wrap">
+  <button id="chat-open" type="button">
+    <span class="chat-open__text" id="chat-open-text">Zeptat se asistenta</span>
+  </button>
+  <span class="chat-open__badge" id="chat-unread" aria-hidden="true" hidden>1</span>
+</div>
 </div>
 
 <section id="chat-panel" aria-labelledby="chat-heading" hidden>

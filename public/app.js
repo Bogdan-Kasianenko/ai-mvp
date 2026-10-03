@@ -7,6 +7,33 @@ const chatPanel = document.querySelector("#chat-panel");
 const chatOpen = document.querySelector("#chat-open");
 const chatClose = document.querySelector("#chat-close");
 const chatPrompt = document.querySelector("#chat-prompt");
+const chatHint = document.querySelector("#chat-launcher-hint");
+const launcherTyping = document.querySelector("#chat-launcher-typing");
+const chatOpenText = document.querySelector("#chat-open-text");
+const unreadBadge = document.querySelector("#chat-unread");
+
+let isFirstVisit = false;
+try {
+  isFirstVisit = localStorage.getItem("autoservice-chat-visited") !== "1";
+  localStorage.setItem("autoservice-chat-visited", "1");
+} catch {
+  // Если хранилище браузера недоступно, показываем обычную кнопку.
+}
+
+let isAiTyping = false;
+let unreadCount = 0;
+
+chatPrompt.classList.toggle("is-first-visit", isFirstVisit);
+chatHint.hidden = !isFirstVisit;
+chatOpenText.textContent = isFirstVisit
+  ? "Zeptat se asistenta"
+  : "Váš AI asistent";
+
+function updateLauncherStatus() {
+  launcherTyping.hidden = !chatPanel.hidden || !isAiTyping;
+  unreadBadge.hidden = unreadCount === 0;
+  unreadBadge.textContent = String(unreadCount);
+}
 
 function resizeMessageInput() {
   input.style.height = "24px";
@@ -28,14 +55,45 @@ input.addEventListener("keydown", (event) => {
 chatOpen.addEventListener("click", () => {
   chatPanel.hidden = false;
   chatPrompt.hidden = true;
+  chatPrompt.classList.remove("is-first-visit");
+chatHint.hidden = true;
+chatOpenText.textContent = "Váš AI asistent";
+unreadCount = 0;
+updateLauncherStatus();
     showWelcomeMessage();
   input.focus();
 });
 
+const chatExpand = document.querySelector("#chat-expand");
 chatClose.addEventListener("click", () => {
   chatPanel.hidden = true;
   chatPrompt.hidden = false;
+  updateLauncherStatus();
   chatOpen.focus();
+});
+
+if (isFirstVisit) {
+  setTimeout(() => {
+    if (chatPanel.hidden) chatPrompt.hidden = false;
+  }, 2500);
+} else {
+  chatPrompt.hidden = false;
+}
+
+chatExpand.addEventListener("click", () => {
+  const expanded = chatPanel.classList.toggle("is-expanded");
+
+  chatExpand.setAttribute(
+    "aria-label",
+    expanded ? "Zmenšit chat" : "Zvětšit chat"
+  );
+
+  chatExpand.querySelector("path").setAttribute(
+    "d",
+    expanded
+      ? "M5 5l8 8m0-7v7H6M25 25l-8-8m0 7v-7h7"
+      : "M13 13 5 5M5 12V5h7M17 17l8 8m-7 0h7v-7"
+  );
 });
 
 function scrollMessagesToBottom() {
@@ -185,6 +243,8 @@ function showWelcomeMessage() {
   if (messages.childElementCount > 0) return;
 
   sendButton.disabled = true;
+  isAiTyping = true;
+updateLauncherStatus();
   const row = showTypingMessage();
 
   setTimeout(() => {
@@ -192,6 +252,9 @@ function showWelcomeMessage() {
       row,
       "Dobrý den! 👋 S čím vám mohu pomoci? Napište mi, co se děje s vaším autem, nebo se zeptejte na služby, ceny či možnosti online objednání do servisu."
     );
+    isAiTyping = false;
+if (chatPanel.hidden) unreadCount += 1;
+updateLauncherStatus();
     sendButton.disabled = false;
   }, 2000);
 }
@@ -208,6 +271,8 @@ form.addEventListener("submit", async (event) => {
   }
 
     sendButton.disabled = true;
+    isAiTyping = true;
+updateLauncherStatus();
   sendButton.classList.add("is-sending");
   showMessage("Vy", message);
   input.value = "";
@@ -274,7 +339,10 @@ form.addEventListener("submit", async (event) => {
     }
 
     finishTypingMessage(row, reply);
+    if (chatPanel.hidden) unreadCount += 1;
   } finally {
+    isAiTyping = false;
+updateLauncherStatus();
     sendButton.disabled = false;
     sendButton.classList.remove("is-sending");
     input.focus({ preventScroll: true });
@@ -332,8 +400,4 @@ if (new URLSearchParams(window.location.search).has("glass-preview")) {
       <div class="glass-preview-lines">KVALITNÍ PÉČE O VÁŠ VŮZ<br>Transparentní ceny · Zkušený tým · Moderní vybavení</div>
     </div>`;
   document.body.prepend(scene);
-
-  chatPanel.hidden = false;
-  chatPrompt.hidden = true;
-    showWelcomeMessage();
 }
