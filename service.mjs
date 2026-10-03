@@ -1,6 +1,9 @@
 import OpenAI from "openai";
 
-const client = new OpenAI();
+const client = new OpenAI({
+  timeout: 20_000,
+  maxRetries: 0
+});
 
 export async function getReply(message, company) {
   const response = await client.responses.create({
