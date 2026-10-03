@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const listenHost = process.env.LISTEN_HOST || "127.0.0.1";
 const publicDirectory = fileURLToPath(new URL("./public/", import.meta.url));
 
 app.disable("x-powered-by");
@@ -61,7 +62,7 @@ app.use((error, request, response, next) => {
   return response.status(500).json({ error: "Požadavek se nepodařilo zpracovat." });
 });
 
-const server = app.listen(port, "127.0.0.1", () => {
+const server = app.listen(port, listenHost, () => {
   console.log(`Open http://127.0.0.1:${port}`);
 });
 

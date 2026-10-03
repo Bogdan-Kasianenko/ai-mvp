@@ -2,7 +2,6 @@ const form = document.querySelector("#chat-form");
 const input = document.querySelector("#message");
 const sendButton = document.querySelector("#send");
 const messages = document.querySelector("#messages");
-const statusText = document.querySelector("#request-status");
 
 const chatPanel = document.querySelector("#chat-panel");
 const chatOpen = document.querySelector("#chat-open");
@@ -19,9 +18,17 @@ function resizeMessageInput() {
 
 input.addEventListener("input", resizeMessageInput);
 
+input.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+
+  event.preventDefault();
+  if (!sendButton.disabled) form.requestSubmit(sendButton);
+});
+
 chatOpen.addEventListener("click", () => {
   chatPanel.hidden = false;
   chatPrompt.hidden = true;
+    showWelcomeMessage();
   input.focus();
 });
 
@@ -31,71 +38,246 @@ chatClose.addEventListener("click", () => {
   chatOpen.focus();
 });
 
-function showMessage(author, text) {
-  const paragraph = document.createElement("p");
-  paragraph.textContent = `${author}: ${text}`;
-  messages.append(paragraph);
+function scrollMessagesToBottom() {
+  messages.scrollTo({
+    top: messages.scrollHeight,
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "auto"
+      : "smooth"
+  });
 }
 
-function showTypingIndicator() {
-  const indicator = document.createElement("div");
-  indicator.className = "typing-indicator";
-  indicator.setAttribute("aria-label", "AI asistent píše");
+function showMessage(author, text) {
+  const isUser = author === "Vy";
+  const isNearBottom =
+    messages.scrollHeight - messages.scrollTop - messages.clientHeight < 96;
+  const row = document.createElement("div");
+  row.className = `chat-message ${isUser ? "chat-message--user" : "chat-message--ai"}`;
+
+    const avatar = document.createElement("span");
+  avatar.className = "chat-message__avatar";
+  avatar.setAttribute("aria-hidden", "true");
+
+  const bubble = document.createElement("div");
+  bubble.className = "chat-message__bubble";
+
+  const meta = document.createElement("div");
+  meta.className = "chat-message__meta";
+
+  const name = document.createElement("span");
+  name.textContent = author;
+
+  const time = document.createElement("time");
+  const now = new Date();
+  time.dateTime = now.toISOString();
+  time.textContent = now.toLocaleTimeString("cs-CZ", {
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+
+  const content = document.createElement("div");
+  content.className = "chat-message__text";
+  content.textContent = text;
+
+   meta.append(name, time);
+  bubble.append(content);
+
+  const body = document.createElement("div");
+  body.className = "chat-message__body";
+  body.append(meta, bubble);
+
+   if (isUser) {
+    row.append(body);
+  } else {
+    row.append(avatar, body);
+  }
+
+  messages.append(row);
+
+  if (isUser || isNearBottom) {
+    requestAnimationFrame(scrollMessagesToBottom);
+  }
+
+  return row;
+}
+
+function showTypingMessage() {
+  const row = showMessage("AI asistent", "");
+  const content = row.querySelector(".chat-message__text");
+
+  const dots = document.createElement("div");
+  dots.className = "chat-typing";
+  dots.setAttribute("role", "status");
+  dots.setAttribute("aria-label", "AI asistent píše");
 
   for (let i = 0; i < 3; i++) {
     const dot = document.createElement("span");
     dot.setAttribute("aria-hidden", "true");
-    indicator.append(dot);
+    dots.append(dot);
   }
 
-  form.append(indicator);
-  return indicator;
+  content.append(dots);
+  return row;
+}
+
+function finishTypingMessage(row, text) {
+  const isNearBottom =
+    messages.scrollHeight - messages.scrollTop - messages.clientHeight < 96;
+
+  const body = row.querySelector(".chat-message__body");
+  const bubble = row.querySelector(".chat-message__bubble");
+  const content = row.querySelector(".chat-message__text");
+
+  const before = bubble.getBoundingClientRect();
+
+  content.textContent = text;
+
+  const after = bubble.getBoundingClientRect();
+  const bodyWidth = body.getBoundingClientRect().width;
+  const textWidth = content.getBoundingClientRect().width;
+
+  const reducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)"
+  ).matches;
+
+  if (reducedMotion || before.width === 0 || after.width === 0) {
+    if (isNearBottom) requestAnimationFrame(scrollMessagesToBottom);
+    return;
+  }
+
+  // Текст сохраняет итоговые переносы, пока пузырь расширяется.
+  body.style.width = `${bodyWidth}px`;
+  content.style.width = `${textWidth}px`;
+  bubble.style.boxSizing = "border-box";
+  bubble.style.overflow = "hidden";
+
+  const expansion = bubble.animate(
+    [
+      { width: `${before.width}px`, height: `${before.height}px` },
+      { width: `${after.width}px`, height: `${after.height}px` }
+    ],
+    {
+      duration: 520,
+      easing: "cubic-bezier(0.22, 1, 0.36, 1)"
+    }
+  );
+
+  content.animate(
+    [
+      { opacity: 0, transform: "translateY(4px)" },
+      { opacity: 0, transform: "translateY(4px)", offset: 0.4 },
+      { opacity: 1, transform: "translateY(0)" }
+    ],
+    { duration: 520, easing: "ease-out" }
+  );
+
+  expansion.onfinish = () => {
+    body.style.removeProperty("width");
+    content.style.removeProperty("width");
+    bubble.style.removeProperty("box-sizing");
+    bubble.style.removeProperty("overflow");
+
+    if (isNearBottom) scrollMessagesToBottom();
+  };
+}
+
+function showWelcomeMessage() {
+  if (messages.childElementCount > 0) return;
+
+  sendButton.disabled = true;
+  const row = showTypingMessage();
+
+  setTimeout(() => {
+    finishTypingMessage(
+      row,
+      "Dobrý den! 👋 S čím vám mohu pomoci? Napište mi, co se děje s vaším autem, nebo se zeptejte na služby, ceny či možnosti online objednání do servisu."
+    );
+    sendButton.disabled = false;
+  }, 2000);
 }
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (sendButton.disabled) return;
+
   const message = input.value.trim();
 
   if (!message || message.length > 1000) {
-    statusText.textContent = "Zadejte zprávu o délce 1 až 1000 znaků.";
+    showMessage("AI asistent", "Zadejte zprávu o délce 1 až 1000 znaků.");
     return;
   }
 
-  sendButton.disabled = true;
-  statusText.textContent = "";
+    sendButton.disabled = true;
+  sendButton.classList.add("is-sending");
   showMessage("Vy", message);
   input.value = "";
   resizeMessageInput();
 
-  const indicator = showTypingIndicator();
+  const typingRowPromise = new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({
+        row: showTypingMessage(),
+        shownAt: performance.now()
+      });
+    }, 650);
+  });
 
   try {
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
-      signal: AbortSignal.timeout(30000)
-    });
+    let reply;
 
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || "Zprávu se nepodařilo odeslat.");
+       try {
+      let response;
+      let data;
+
+      try {
+        response = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+          signal: AbortSignal.timeout(30000)
+        });
+
+        data = await response.json();
+      } catch (error) {
+        if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+          throw new Error("Odpověď trvá příliš dlouho. Zkuste to prosím znovu.");
+        }
+
+        if (!response) {
+          throw new Error("Nepodařilo se připojit k serveru. Zkuste to prosím později.");
+        }
+
+        throw new Error("Odpověď se nepodařilo načíst. Zkuste to prosím znovu.");
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          typeof data?.error === "string" && data.error.trim()
+            ? data.error
+            : "Zprávu se nepodařilo zpracovat. Zkuste to prosím později."
+        );
+      }
+
+      if (typeof data?.reply !== "string" || !data.reply.trim()) {
+        throw new Error("AI asistent nyní nemůže odpovědět. Zkuste to prosím později.");
+      }
+
+      reply = data.reply;
+    } catch (error) {
+      reply = error.message || "Zprávu se nepodařilo odeslat. Zkuste to znovu.";
     }
 
-    const data = await response.json();
-    if (typeof data.reply !== "string") {
-      throw new Error("Invalid reply");
+    const { row, shownAt } = await typingRowPromise;
+    const remaining = Math.max(0, 400 - (performance.now() - shownAt));
+    if (remaining > 0) {
+      await new Promise((resolve) => setTimeout(resolve, remaining));
     }
 
-    showMessage("AI asistent", data.reply);
-  } catch (error) {
-    statusText.textContent =
-      error.message || "Zprávu se nepodařilo odeslat. Zkuste to znovu.";
+    finishTypingMessage(row, reply);
   } finally {
-    indicator.remove();
-    messages.scrollTop = messages.scrollHeight;
     sendButton.disabled = false;
-    input.focus();
+    sendButton.classList.remove("is-sending");
+    input.focus({ preventScroll: true });
   }
 });
 async function loadCompany() {
@@ -153,4 +335,5 @@ if (new URLSearchParams(window.location.search).has("glass-preview")) {
 
   chatPanel.hidden = false;
   chatPrompt.hidden = true;
+    showWelcomeMessage();
 }
