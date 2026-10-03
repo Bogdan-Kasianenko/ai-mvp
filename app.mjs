@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { getReply } from "./service.mjs";
 import express from "express";
 import { fileURLToPath } from "node:url";
-import { APIConnectionTimeoutError } from "openai";
+import { APIConnectionError, APIConnectionTimeoutError, InternalServerError } from "openai";
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -65,9 +65,13 @@ app.use((error, request, response, next) => {
     error: "AI asistent neodpovídá. Zkuste to prosím znovu."
   });
 }
-  if (error.status === 429) {
-    console.error("AI request unavailable:", error.message);
-    return response.status(503).json({
+  if (
+  error.status === 429 ||
+  error instanceof APIConnectionError ||
+  error instanceof InternalServerError
+) {
+  console.error("AI request unavailable:", error.message);
+  return response.status(503).json({
     error: "AI asistent je dočasně nedostupný. Zkuste to prosím později."
   });
 }
