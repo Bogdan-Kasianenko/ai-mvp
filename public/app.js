@@ -57,43 +57,143 @@ function updateLauncherStatus() {
 }
 
 const CHAT_HISTORY_KEY = "autoservice-chat-history-v1";
+const CHAT_MESSAGE_PREFIX = "autoservice-chat-message-v1:";
 const MAX_SAVED_MESSAGES = 50;
 let chatHistory = [];
 
-try {
-  const saved = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "[]");
-
-  if (Array.isArray(saved)) {
-    chatHistory = saved.filter((entry) =>
-      entry &&
-      ["user", "assistant", "error", "welcome"].includes(entry.role) &&
-      typeof entry.content === "string" &&
-      entry.content.trim().length > 0 &&
-      entry.content.length <= 20000 &&
-      typeof entry.at === "string" &&
-      !Number.isNaN(Date.parse(entry.at))
-    ).slice(-MAX_SAVED_MESSAGES);
-  }
-} catch {
-  chatHistory = [];
+function isValidHistoryEntry(entry) {
+  return entry &&
+    typeof entry.id === "string" &&
+    ["user", "assistant", "error", "welcome"].includes(entry.role) &&
+    typeof entry.content === "string" &&
+    entry.content.trim().length > 0 &&
+    entry.content.length <= 20000 &&
+    typeof entry.at === "string" &&
+    !Number.isNaN(Date.parse(entry.at));
 }
 
-function rememberMessage(role, content, at = new Date().toISOString()) {
-  chatHistory.push({
-    role,
-    content,
-    at
-  });
+function compareHistoryEntries(a, b) {
+  return Date.parse(a.at) - Date.parse(b.at) || a.id.localeCompare(b.id);
+}
+
+function readStoredHistory() {
+  const entries = new Map();
+
+  try {
+    const oldHistory = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "null");
+    if (Array.isArray(oldHistory)) {
+      oldHistory.forEach((entry, index) => {
+        const migrated = { ...entry, id: `legacy-${index}-${entry?.at}` };
+        if (isValidHistoryEntry(migrated)) entries.set(migrated.id, migrated);
+      });
+    }
+  } catch {
+    // Повреждённый старый ключ не мешает читать новые сообщения.
+  }
+
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(CHAT_MESSAGE_PREFIX)) continue;
+
+      try {
+        const entry = JSON.parse(localStorage.getItem(key));
+        if (isValidHistoryEntry(entry) && key === CHAT_MESSAGE_PREFIX + entry.id) {
+          entries.set(entry.id, entry);
+        }
+      } catch {
+        // Повреждённая запись не мешает читать остальные сообщения.
+      }
+    }
+  } catch {
+    // Если хранилище недоступно, остаётся история текущей вкладки.
+  }
+
+  return [...entries.values()].sort(compareHistoryEntries).slice(-MAX_SAVED_MESSAGES);
+}
+
+function migrateOldHistory() {
+  try {
+    const oldHistory = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "null");
+    if (!Array.isArray(oldHistory)) return;
+
+    oldHistory.forEach((entry, index) => {
+      const migrated = { ...entry, id: `legacy-${index}-${entry?.at}` };
+      if (!isValidHistoryEntry(migrated)) return;
+      localStorage.setItem(CHAT_MESSAGE_PREFIX + migrated.id, JSON.stringify(migrated));
+    });
+    localStorage.removeItem(CHAT_HISTORY_KEY);
+  } catch {
+    // Старый ключ остаётся на месте, если перенос не удался.
+  }
+}
+
+function pruneStoredHistory() {
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(CHAT_MESSAGE_PREFIX)) keys.push(key);
+    }
+
+    if (keys.length <= MAX_SAVED_MESSAGES) return;
+    const newest = new Set(readStoredHistory().map((entry) => CHAT_MESSAGE_PREFIX + entry.id));
+    for (const key of keys) {
+      if (!newest.has(key)) localStorage.removeItem(key);
+    }
+  } catch {
+    // Ошибка очистки не должна прерывать чат.
+  }
+}
+
+function makeMessageId() {
+  return globalThis.crypto?.randomUUID?.() ||
+    `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function rememberMessage(role, content, at = new Date().toISOString(), id = makeMessageId()) {
+  const entry = { id, role, content, at };
+  if (chatHistory.some((message) => message.id === id)) return entry;
+
+  chatHistory.push(entry);
+  chatHistory.sort(compareHistoryEntries);
   chatHistory = chatHistory.slice(-MAX_SAVED_MESSAGES);
 
   try {
-    localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(chatHistory));
+    localStorage.setItem(CHAT_MESSAGE_PREFIX + id, JSON.stringify(entry));
+    pruneStoredHistory();
   } catch {
     // Чат продолжит работать, даже если браузер запретил сохранение.
   }
+
+  return entry;
 }
 
+function refreshChatHistory() {
+  const knownIds = new Set(chatHistory.map((entry) => entry.id));
+  const newEntries = readStoredHistory().filter((entry) => !knownIds.has(entry.id));
+
+  for (const entry of newEntries) {
+    const author = entry.role === "user" ? "Vy" : "AI asistent";
+    const row = showMessage(author, entry.content, entry.at, true);
+    placeHistoryRow(row, entry);
+  }
+
+  chatHistory.push(...newEntries);
+  chatHistory.sort(compareHistoryEntries);
+  chatHistory = chatHistory.slice(-MAX_SAVED_MESSAGES);
+}
+
+migrateOldHistory();
+chatHistory = readStoredHistory();
+pruneStoredHistory();
+
+window.addEventListener("storage", (event) => {
+  if (event.key?.startsWith(CHAT_MESSAGE_PREFIX)) refreshChatHistory();
+});
+
 function getRecentContext() {
+  refreshChatHistory();
   const context = [];
   let totalLength = 0;
 
@@ -297,6 +397,28 @@ function showMessage(author, text, at = new Date().toISOString(), restored = fal
   return row;
 }
 
+function placeHistoryRow(row, entry) {
+  row.dataset.historyId = entry.id;
+
+  for (const other of messages.querySelectorAll(".chat-message[data-history-id]")) {
+    if (other === row) continue;
+    const otherEntry = {
+      id: other.dataset.historyId,
+      at: other.querySelector("time").dateTime
+    };
+    if (compareHistoryEntries(entry, otherEntry) < 0) {
+      messages.insertBefore(row, other);
+      return;
+    }
+  }
+
+  const unsavedRow = [...messages.children].find((other) =>
+    other !== row && other.classList.contains("chat-message") && !other.dataset.historyId
+  );
+  if (unsavedRow) messages.insertBefore(row, unsavedRow);
+  else messages.append(row);
+}
+
 function showTypingMessage() {
   const row = showMessage("AI asistent", "");
   const content = row.querySelector(".chat-message__text");
@@ -386,9 +508,18 @@ function showWelcomeMessage() {
   const row = showTypingMessage();
 
   setTimeout(() => {
+    if (chatHistory.some((entry) => entry.role === "welcome")) {
+      row.remove();
+      isAiTyping = false;
+      updateLauncherStatus();
+      sendButton.disabled = false;
+      return;
+    }
+
     const welcomeText = "Dobrý den! 👋 S čím vám mohu pomoci? Napište mi, co se děje s vaším autem, nebo se zeptejte na služby, ceny či možnosti online objednání do servisu.";
     finishTypingMessage(row, welcomeText);
-    rememberMessage("welcome", welcomeText, row.querySelector("time").dateTime);
+    const welcomeEntry = rememberMessage("welcome", welcomeText, row.querySelector("time").dateTime, "welcome");
+    placeHistoryRow(row, welcomeEntry);
 
     isAiTyping = false;
     if (chatPanel.hidden) unreadCount += 1;
@@ -414,7 +545,8 @@ form.addEventListener("submit", async (event) => {
   updateLauncherStatus();
   sendButton.classList.add("is-sending");
   const userRow = showMessage("Vy", message);
-  rememberMessage("user", message, userRow.querySelector("time").dateTime);
+  const userEntry = rememberMessage("user", message, userRow.querySelector("time").dateTime);
+  placeHistoryRow(userRow, userEntry);
   input.value = "";
   resizeMessageInput();
 
@@ -488,7 +620,8 @@ form.addEventListener("submit", async (event) => {
       hour: "2-digit",
       minute: "2-digit"
     });
-    rememberMessage(replyRole, reply, replyTime.dateTime);
+    const replyEntry = rememberMessage(replyRole, reply, replyTime.dateTime);
+    placeHistoryRow(row, replyEntry);
     if (chatPanel.hidden) unreadCount += 1;
   } finally {
     isAiTyping = false;
@@ -526,7 +659,8 @@ async function loadCompany() {
 
 for (const entry of chatHistory) {
   const author = entry.role === "user" ? "Vy" : "AI asistent";
-  showMessage(author, entry.content, entry.at, true);
+  const row = showMessage(author, entry.content, entry.at, true);
+  placeHistoryRow(row, entry);
 }
 
 setChatExpanded(chatUiState.expanded);
