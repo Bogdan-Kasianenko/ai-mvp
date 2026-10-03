@@ -23,7 +23,8 @@ Open http://127.0.0.1:3000. The server listens only on this computer.
   messages, and the demo data in `company.json` to the OpenAI Responses API.
   It requests `store: false`.
 - The browser saves up to 50 visible messages in localStorage, so chat remains
-  after a reload. The app does not store chat history on its server.
+  after a reload. Messages over 20,000 characters are visibly shortened before
+  display and storage. The app does not store chat history on its server.
 - The browser also remembers whether the chat is open and whether the desktop
   chat is expanded.
 - The page tells visitors that messages are sent to OpenAI and asks them not

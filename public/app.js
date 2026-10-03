@@ -59,7 +59,18 @@ function updateLauncherStatus() {
 const CHAT_HISTORY_KEY = "autoservice-chat-history-v1";
 const CHAT_MESSAGE_PREFIX = "autoservice-chat-message-v1:";
 const MAX_SAVED_MESSAGES = 50;
+const MAX_MESSAGE_LENGTH = 20000;
+const TRUNCATION_NOTICE = "\n\n[Zpráva byla zkrácena.]";
 let chatHistory = [];
+
+function limitMessageLength(content) {
+  if (content.length <= MAX_MESSAGE_LENGTH) return content;
+
+  let end = MAX_MESSAGE_LENGTH - TRUNCATION_NOTICE.length;
+  const lastCode = content.charCodeAt(end - 1);
+  if (lastCode >= 0xD800 && lastCode <= 0xDBFF) end--;
+  return content.slice(0, end) + TRUNCATION_NOTICE;
+}
 
 function isValidHistoryEntry(entry) {
   return entry &&
@@ -67,9 +78,19 @@ function isValidHistoryEntry(entry) {
     ["user", "assistant", "error", "welcome"].includes(entry.role) &&
     typeof entry.content === "string" &&
     entry.content.trim().length > 0 &&
-    entry.content.length <= 20000 &&
     typeof entry.at === "string" &&
     !Number.isNaN(Date.parse(entry.at));
+}
+
+function normalizeHistoryEntry(entry) {
+  return isValidHistoryEntry(entry)
+    ? {
+        id: entry.id,
+        role: entry.role,
+        content: limitMessageLength(entry.content),
+        at: entry.at
+      }
+    : null;
 }
 
 function compareHistoryEntries(a, b) {
@@ -83,8 +104,8 @@ function readStoredHistory() {
     const oldHistory = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "null");
     if (Array.isArray(oldHistory)) {
       oldHistory.forEach((entry, index) => {
-        const migrated = { ...entry, id: `legacy-${index}-${entry?.at}` };
-        if (isValidHistoryEntry(migrated)) entries.set(migrated.id, migrated);
+        const migrated = normalizeHistoryEntry({ ...entry, id: `legacy-${index}-${entry?.at}` });
+        if (migrated) entries.set(migrated.id, migrated);
       });
     }
   } catch {
@@ -97,8 +118,8 @@ function readStoredHistory() {
       if (!key?.startsWith(CHAT_MESSAGE_PREFIX)) continue;
 
       try {
-        const entry = JSON.parse(localStorage.getItem(key));
-        if (isValidHistoryEntry(entry) && key === CHAT_MESSAGE_PREFIX + entry.id) {
+        const entry = normalizeHistoryEntry(JSON.parse(localStorage.getItem(key)));
+        if (entry && key === CHAT_MESSAGE_PREFIX + entry.id) {
           entries.set(entry.id, entry);
         }
       } catch {
@@ -118,8 +139,8 @@ function migrateOldHistory() {
     if (!Array.isArray(oldHistory)) return;
 
     oldHistory.forEach((entry, index) => {
-      const migrated = { ...entry, id: `legacy-${index}-${entry?.at}` };
-      if (!isValidHistoryEntry(migrated)) return;
+      const migrated = normalizeHistoryEntry({ ...entry, id: `legacy-${index}-${entry?.at}` });
+      if (!migrated) return;
       localStorage.setItem(CHAT_MESSAGE_PREFIX + migrated.id, JSON.stringify(migrated));
     });
     localStorage.removeItem(CHAT_HISTORY_KEY);
@@ -152,7 +173,7 @@ function makeMessageId() {
 }
 
 function rememberMessage(role, content, at = new Date().toISOString(), id = makeMessageId()) {
-  const entry = { id, role, content, at };
+  const entry = { id, role, content: limitMessageLength(content), at };
   if (chatHistory.some((message) => message.id === id)) return entry;
 
   chatHistory.push(entry);
@@ -605,6 +626,8 @@ form.addEventListener("submit", async (event) => {
       replyRole = "error";
       reply = error.message || "Zprávu se nepodařilo odeslat. Zkuste to znovu.";
     }
+
+    reply = limitMessageLength(reply);
 
     const { row, shownAt } = await typingRowPromise;
     const remaining = Math.max(0, 400 - (performance.now() - shownAt));
