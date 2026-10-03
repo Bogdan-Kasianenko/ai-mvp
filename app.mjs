@@ -41,8 +41,15 @@ app.post("/api/chat", async (request, response) => {
     });
   }
 
- const company = await loadCompanyData();
-const reply = await getReply(message, company);
+  const company = await loadCompanyData();
+  const reply = await getReply(message, company);
+
+  if (typeof reply !== "string" || !reply.trim()) {
+    return response.status(502).json({
+      error: "AI asistent nyní nemůže odpovědět. Zkuste to prosím později."
+    });
+  }
+
   return response.json({ reply });
 });
 
