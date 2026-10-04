@@ -67,15 +67,22 @@ app.post("/api/chat", async (request, response) => {
     content: content.trim()
   }));
   const company = await loadCompanyData();
-  const reply = await getReply(message, company, cleanHistory);
+  const result = await getReply(message, company, cleanHistory);
 
-  if (typeof reply !== "string" || !reply.trim()) {
+  if (result.kind === "refusal") {
+    return response.json({
+      reply: "S tímto požadavkem Vám nemohu pomoci. Můžete se zeptat na něco jiného.",
+      refused: true
+    });
+  }
+
+  if (typeof result.text !== "string" || !result.text.trim()) {
     return response.status(502).json({
       error: "AI asistent nyní nemůže odpovědět. Zkuste to prosím později."
     });
   }
 
-  return response.json({ reply });
+  return response.json({ reply: result.text });
 });
 
 app.use((error, request, response, next) => {

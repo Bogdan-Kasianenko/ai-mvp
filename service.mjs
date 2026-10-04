@@ -35,8 +35,18 @@ export async function getReply(message, company, history) {
       response.status,
       response.incomplete_details?.reason || response.error?.code || "unknown"
     );
-    return "";
+    return { kind: "unavailable" };
   }
 
-  return response.output_text;
+  const refused = response.output?.some(
+    (item) =>
+      item.type === "message" &&
+      item.content?.some((part) => part.type === "refusal")
+  );
+
+  if (refused) {
+    return { kind: "refusal" };
+  }
+
+  return { kind: "reply", text: response.output_text };
 }
