@@ -92,6 +92,7 @@ function updateLauncherStatus() {
 
 const CHAT_HISTORY_KEY = "autoservice-chat-history-v1";
 const CHAT_MESSAGE_PREFIX = "autoservice-chat-message-v1:";
+const PENDING_CHAT_MESSAGE_KEY = "autoservice-chat-pending-v1";
 const MAX_SAVED_MESSAGES = 50;
 const MAX_MESSAGE_LENGTH = 20000;
 const TRUNCATION_NOTICE = "\n\n[Zpráva byla zkrácena.]";
@@ -242,6 +243,23 @@ function refreshChatHistory() {
 migrateOldHistory();
 chatHistory = readStoredHistory();
 pruneStoredHistory();
+
+try {
+  const pendingId = sessionStorage.getItem(PENDING_CHAT_MESSAGE_KEY);
+  if (pendingId) {
+    if (chatHistory.some((entry) => entry.id === pendingId && entry.role === "user")) {
+      rememberMessage(
+        "error",
+        "Odpověď byla přerušena obnovením stránky. Odešlete zprávu prosím znovu.",
+        new Date().toISOString(),
+        `interrupted-${pendingId}`
+      );
+    }
+    sessionStorage.removeItem(PENDING_CHAT_MESSAGE_KEY);
+  }
+} catch {
+  // Nedostupné úložiště nesmí zabránit načtení chatu.
+}
 
 window.addEventListener("storage", (event) => {
   if (event.key?.startsWith(CHAT_MESSAGE_PREFIX)) refreshChatHistory();
@@ -608,6 +626,11 @@ form.addEventListener("submit", async (event) => {
   const userRow = showMessage("Vy", message);
   const userEntry = rememberMessage("user", message, userRow.querySelector("time").dateTime);
   placeHistoryRow(userRow, userEntry);
+  try {
+    sessionStorage.setItem(PENDING_CHAT_MESSAGE_KEY, userEntry.id);
+  } catch {
+    // Bez úložiště karta stále může dokončit aktuální požadavek.
+  }
   input.value = "";
   resizeMessageInput();
 
@@ -684,6 +707,13 @@ form.addEventListener("submit", async (event) => {
       minute: "2-digit"
     });
     const replyEntry = rememberMessage(replyRole, reply, replyTime.dateTime);
+    try {
+      if (sessionStorage.getItem(PENDING_CHAT_MESSAGE_KEY) === userEntry.id) {
+        sessionStorage.removeItem(PENDING_CHAT_MESSAGE_KEY);
+      }
+    } catch {
+      // Odpověď už je uložená v historii.
+    }
     placeHistoryRow(row, replyEntry);
     if (chatPanel.hidden) unreadCount += 1;
   } finally {
