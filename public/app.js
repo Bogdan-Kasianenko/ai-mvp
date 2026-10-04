@@ -11,6 +11,7 @@ const chatHint = document.querySelector("#chat-launcher-hint");
 const launcherTyping = document.querySelector("#chat-launcher-typing");
 const chatOpenText = document.querySelector("#chat-open-text");
 const unreadBadge = document.querySelector("#chat-unread");
+const unreadStatus = document.querySelector("#chat-unread-status");
 
 let isFirstVisit = false;
 try {
@@ -88,6 +89,24 @@ function updateLauncherStatus() {
   launcherTyping.hidden = !chatPanel.hidden || !isAiTyping;
   unreadBadge.hidden = unreadCount === 0;
   unreadBadge.textContent = String(unreadCount);
+
+  const unreadLabel = unreadCount === 1
+    ? "1 nepřečtená zpráva"
+    : unreadCount < 5
+      ? `${unreadCount} nepřečtené zprávy`
+      : `${unreadCount} nepřečtených zpráv`;
+  const buttonLabel = chatOpenText.textContent.trim();
+  chatOpen.setAttribute(
+    "aria-label",
+    unreadCount > 0 ? `${buttonLabel}. ${unreadLabel}` : buttonLabel
+  );
+
+  const announcement = unreadCount > 0 && chatPanel.hidden
+    ? `AI asistent: ${unreadLabel}.`
+    : "";
+  if (unreadStatus.textContent !== announcement) {
+    unreadStatus.textContent = announcement;
+  }
 }
 
 const CHAT_HISTORY_KEY = "autoservice-chat-history-v1";
