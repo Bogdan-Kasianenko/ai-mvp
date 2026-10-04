@@ -29,5 +29,14 @@ export async function getReply(message, company, history) {
     store: false
   });
 
+  if (response.status !== "completed") {
+    console.error(
+      "AI response not completed:",
+      response.status,
+      response.incomplete_details?.reason || response.error?.code || "unknown"
+    );
+    return "";
+  }
+
   return response.output_text;
 }
