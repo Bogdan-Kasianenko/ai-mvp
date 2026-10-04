@@ -92,6 +92,9 @@ app.use((error, request, response, next) => {
   if (error.type === "entity.too.large") {
     return response.status(413).json({ error: "Zpráva je příliš dlouhá." });
   }
+  if (error.type === "charset.unsupported" || error.type === "encoding.unsupported") {
+    return response.status(415).json({ error: "Nepodporované kódování požadavku." });
+  }
   if (error instanceof APIConnectionTimeoutError) {
     return response.status(503).json({
       error: "AI asistent neodpovídá. Zkuste to prosím znovu."
