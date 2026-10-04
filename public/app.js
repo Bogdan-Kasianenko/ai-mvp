@@ -93,10 +93,12 @@ function updateLauncherStatus() {
 const CHAT_HISTORY_KEY = "autoservice-chat-history-v1";
 const CHAT_MESSAGE_PREFIX = "autoservice-chat-message-v1:";
 const PENDING_CHAT_MESSAGE_KEY = "autoservice-chat-pending-v1";
+const CHAT_LAST_READ_KEY = "autoservice-chat-last-read-v1";
 const MAX_SAVED_MESSAGES = 50;
 const MAX_MESSAGE_LENGTH = 20000;
 const TRUNCATION_NOTICE = "\n\n[Zpráva byla zkrácena.]";
 let chatHistory = [];
+let lastReadMarker = null;
 
 function limitMessageLength(content) {
   if (content.length <= MAX_MESSAGE_LENGTH) return content;
@@ -130,6 +132,57 @@ function normalizeHistoryEntry(entry) {
 
 function compareHistoryEntries(a, b) {
   return Date.parse(a.at) - Date.parse(b.at) || a.id.localeCompare(b.id);
+}
+
+function readStoredLastReadMarker() {
+  try {
+    const marker = JSON.parse(localStorage.getItem(CHAT_LAST_READ_KEY) || "null");
+    return marker &&
+      typeof marker.id === "string" &&
+      typeof marker.at === "string" &&
+      !Number.isNaN(Date.parse(marker.at))
+      ? marker
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function updateUnreadCount() {
+  unreadCount = chatHistory.filter(
+    (entry) =>
+      ["assistant", "error", "welcome"].includes(entry.role) &&
+      (!lastReadMarker || compareHistoryEntries(entry, lastReadMarker) > 0)
+  ).length;
+  updateLauncherStatus();
+}
+
+function markMessagesRead() {
+  const storedMarker = readStoredLastReadMarker();
+  let newest = lastReadMarker;
+  if (storedMarker && (!newest || compareHistoryEntries(storedMarker, newest) > 0)) {
+    newest = storedMarker;
+  }
+
+  const latestMessage = chatHistory.at(-1);
+  if (latestMessage && (!newest || compareHistoryEntries(latestMessage, newest) > 0)) {
+    newest = { id: latestMessage.id, at: latestMessage.at };
+  }
+
+  lastReadMarker = newest;
+  if (newest && (!storedMarker || compareHistoryEntries(newest, storedMarker) > 0)) {
+    try {
+      localStorage.setItem(CHAT_LAST_READ_KEY, JSON.stringify(newest));
+    } catch {
+      // Bez úložiště zůstane stav přečtení jen v této kartě.
+    }
+  }
+  updateUnreadCount();
+}
+
+function syncUnreadCount() {
+  if (chatUiState.open && !chatPanel.hidden) markMessagesRead();
+  else updateUnreadCount();
 }
 
 function readStoredHistory() {
@@ -222,6 +275,7 @@ function rememberMessage(role, content, at = new Date().toISOString(), id = make
     // Чат продолжит работать, даже если браузер запретил сохранение.
   }
 
+  syncUnreadCount();
   return entry;
 }
 
@@ -238,11 +292,15 @@ function refreshChatHistory() {
   chatHistory.push(...newEntries);
   chatHistory.sort(compareHistoryEntries);
   chatHistory = chatHistory.slice(-MAX_SAVED_MESSAGES);
+  syncUnreadCount();
 }
 
 migrateOldHistory();
 chatHistory = readStoredHistory();
 pruneStoredHistory();
+lastReadMarker = readStoredLastReadMarker();
+if (lastReadMarker) updateUnreadCount();
+else markMessagesRead();
 
 try {
   const pendingId = sessionStorage.getItem(PENDING_CHAT_MESSAGE_KEY);
@@ -263,6 +321,13 @@ try {
 
 window.addEventListener("storage", (event) => {
   if (event.key?.startsWith(CHAT_MESSAGE_PREFIX)) refreshChatHistory();
+  if (event.key === CHAT_LAST_READ_KEY) {
+    const marker = readStoredLastReadMarker();
+    if (marker && (!lastReadMarker || compareHistoryEntries(marker, lastReadMarker) > 0)) {
+      lastReadMarker = marker;
+      syncUnreadCount();
+    }
+  }
 });
 
 function getRecentContext() {
@@ -312,8 +377,7 @@ chatOpen.addEventListener("click", () => {
   chatPrompt.classList.remove("is-first-visit");
   chatHint.hidden = true;
   chatOpenText.textContent = "Váš AI asistent";
-  unreadCount = 0;
-  updateLauncherStatus();
+  markMessagesRead();
 
   const hadMessages = messages.childElementCount > 0;
   showWelcomeMessage();
@@ -601,7 +665,6 @@ function showWelcomeMessage() {
     placeHistoryRow(row, welcomeEntry);
 
     isAiTyping = false;
-    if (chatPanel.hidden) unreadCount += 1;
     updateLauncherStatus();
     sendButton.disabled = false;
   }, 2000);
@@ -715,7 +778,6 @@ form.addEventListener("submit", async (event) => {
       // Odpověď už je uložená v historii.
     }
     placeHistoryRow(row, replyEntry);
-    if (chatPanel.hidden) unreadCount += 1;
   } finally {
     isAiTyping = false;
     updateLauncherStatus();
@@ -764,7 +826,7 @@ if (chatUiState.open) {
   chatPrompt.classList.remove("is-first-visit");
   chatHint.hidden = true;
   chatOpenText.textContent = "Váš AI asistent";
-  updateLauncherStatus();
+  markMessagesRead();
   showWelcomeMessage();
   requestAnimationFrame(() => {
     messages.scrollTop = messages.scrollHeight;
