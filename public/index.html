@@ -79,6 +79,24 @@
 
   <div id="messages" aria-label="Zprávy" aria-live="polite"></div>
 
+  <button id="chat-new-messages" class="chat-new-messages" type="button" hidden>
+    <span class="chat-new-messages__dots" aria-hidden="true"><span></span><span></span><span></span></span>
+    <span id="chat-new-messages-text">AI asistent píše…</span>
+    <span class="chat-new-messages__arrow" aria-hidden="true">↓</span>
+  </button>
+  <div id="chat-suggestions" class="chat-suggestions" hidden>
+      <button id="question-list-toggle" class="chat-suggestions__toggle" type="button"
+        aria-expanded="false" aria-controls="question-list">Vybrat otázku ze seznamu</button>
+      <div id="question-list" class="chat-suggestions__list" hidden>
+        <button type="button" data-question="Jaké služby nabízíte?">Jaké služby nabízíte?</button>
+        <button type="button" data-question="Jak probíhá diagnostika auta?">Jak probíhá diagnostika auta?</button>
+        <button type="button" data-question="Kolik stojí diagnostika?">Kolik stojí diagnostika?</button>
+        <button type="button" data-question="Co dělat, když svítí kontrolka motoru?">Co dělat, když svítí kontrolka motoru?</button>
+        <button type="button" data-question="Co dělat, když auto nestartuje?">Co dělat, když auto nestartuje?</button>
+        <button type="button" data-question="Jak se připravit na diagnostiku?">Jak se připravit na diagnostiku?</button>
+      </div>
+    </div>
+
   <form id="chat-form">
   <label for="message">Vaše zpráva</label>
   <div class="message-box">
@@ -89,7 +107,7 @@
 </form>
 
 </section>
-    <p class="note">Testovací verze. Nezadávejte jméno, telefon ani jiné osobní údaje. Zprávy se posílají službě OpenAI pro vytvoření odpovědi. Historie chatu se ukládá v tomto prohlížeči; demo ji neukládá na svém serveru.</p>
+    <p class="note">Testovací verze. Nezadávejte jméno, telefon ani jiné osobní údaje. Zprávy se posílají službě OpenAI pro vytvoření odpovědi. Historie chatu se ukládá v tomto prohlížeči; po 24 hodinách bez další zprávy se při příští návštěvě smaže. Demo ji neukládá na svém serveru.</p>
   </main>
   <div id="chat-unread-status" class="sr-only" role="status" aria-atomic="true"></div>
 </body>

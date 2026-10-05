@@ -23,8 +23,13 @@ Open http://127.0.0.1:3000. The server listens only on this computer.
   messages, and the demo data in `company.json` to the OpenAI Responses API.
   It requests `store: false`.
 - The browser saves up to 50 visible messages in localStorage, so chat remains
-  after a reload. Messages over 20,000 characters are visibly shortened before
-  display and storage. The app does not store chat history on its server.
+  after a reload. After 24 hours without a new message, it clears the conversation
+  on the next visit (or while the page remains open). Messages over 20,000
+  characters are visibly shortened before display and storage. The app does not
+  store chat history on its server.
+- A fresh conversation offers six suggested questions. If an answer arrives
+  while the visitor is reading earlier messages, a button shows the unread count
+  and scrolls to the newest reply.
 - The browser also remembers whether the chat is open and whether the desktop
   chat is expanded.
 - The page tells visitors that messages are sent to OpenAI and asks them not
@@ -44,3 +49,9 @@ Open http://127.0.0.1:3000. The server listens only on this computer.
 6. Reload the page: the previous conversation remains visible.
 7. Leave the chat open and reload: it stays open. Expand it, close it, then
    reload and reopen: the expanded width is restored on desktop.
+8. In a fresh conversation, open the suggested-question list and select one:
+   it is sent immediately and the list disappears.
+9. While waiting for a reply, scroll up in a long conversation: a typing notice
+   becomes an unread-message button. Click it or scroll to the bottom to dismiss it.
+10. After 24 hours without a new message, reload: the old conversation is gone
+    and a fresh greeting and question list are shown.

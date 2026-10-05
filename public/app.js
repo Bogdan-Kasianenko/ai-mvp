@@ -12,13 +12,19 @@ const launcherTyping = document.querySelector("#chat-launcher-typing");
 const chatOpenText = document.querySelector("#chat-open-text");
 const unreadBadge = document.querySelector("#chat-unread");
 const unreadStatus = document.querySelector("#chat-unread-status");
+const newMessagesButton = document.querySelector("#chat-new-messages");
+const newMessagesText = document.querySelector("#chat-new-messages-text");
+const newMessagesDots = newMessagesButton.querySelector(".chat-new-messages__dots");
+const chatSuggestions = document.querySelector("#chat-suggestions");
+const questionListToggle = document.querySelector("#question-list-toggle");
+const questionList = document.querySelector("#question-list");
 
+const CHAT_OPENED_KEY = "autoservice-chat-opened-v2";
 let isFirstVisit = false;
 try {
-  isFirstVisit = localStorage.getItem("autoservice-chat-visited") !== "1";
-  localStorage.setItem("autoservice-chat-visited", "1");
+  isFirstVisit = localStorage.getItem(CHAT_OPENED_KEY) !== "1";
 } catch {
-  // Если хранилище браузера недоступно, показываем обычную кнопку.
+  // Если хранилище недоступно, показываем обычную кнопку.
 }
 
 const CHAT_UI_KEY = "autoservice-chat-ui-v1";
@@ -101,11 +107,34 @@ function updateLauncherStatus() {
     unreadCount > 0 ? `${buttonLabel}. ${unreadLabel}` : buttonLabel
   );
 
-  const announcement = unreadCount > 0 && chatPanel.hidden
+  const announcement = unreadCount > 0 && (chatPanel.hidden || !isNearMessagesBottom())
     ? `AI asistent: ${unreadLabel}.`
     : "";
   if (unreadStatus.textContent !== announcement) {
     unreadStatus.textContent = announcement;
+  }
+  updateInChatNotice();
+}
+
+function isNearMessagesBottom() {
+  return messages.scrollHeight - messages.scrollTop - messages.clientHeight < 96;
+}
+
+function updateInChatNotice() {
+  const showNotice = chatUiState.open && !chatPanel.hidden && !isNearMessagesBottom();
+  const showUnread = showNotice && unreadCount > 0;
+  const showTyping = showNotice && !showUnread && isAiTyping;
+
+  newMessagesButton.hidden = !showUnread && !showTyping;
+  newMessagesDots.hidden = !showTyping;
+  if (showUnread) {
+    newMessagesText.textContent = unreadCount === 1
+      ? "1 nepřečtená zpráva"
+      : unreadCount < 5
+        ? `${unreadCount} nepřečtené zprávy`
+        : `${unreadCount} nepřečtených zpráv`;
+  } else if (showTyping) {
+    newMessagesText.textContent = "AI asistent píše…";
   }
 }
 
@@ -113,11 +142,15 @@ const CHAT_HISTORY_KEY = "autoservice-chat-history-v1";
 const CHAT_MESSAGE_PREFIX = "autoservice-chat-message-v1:";
 const PENDING_CHAT_MESSAGE_KEY = "autoservice-chat-pending-v1";
 const CHAT_LAST_READ_KEY = "autoservice-chat-last-read-v1";
+const CHAT_RESET_KEY = "autoservice-chat-reset-v1";
+const CHAT_HISTORY_LIFETIME = 24 * 60 * 60 * 1000;
 const MAX_SAVED_MESSAGES = 50;
 const MAX_MESSAGE_LENGTH = 20000;
 const TRUNCATION_NOTICE = "\n\n[Zpráva byla zkrácena.]";
 let chatHistory = [];
 let lastReadMarker = null;
+let chatGeneration = 0;
+let historyExpiryTimer;
 
 function limitMessageLength(content) {
   if (content.length <= MAX_MESSAGE_LENGTH) return content;
@@ -200,7 +233,10 @@ function markMessagesRead() {
 }
 
 function syncUnreadCount() {
-  if (chatUiState.open && !chatPanel.hidden) markMessagesRead();
+  if (
+    chatUiState.open && !chatPanel.hidden &&
+    document.visibilityState === "visible" && isNearMessagesBottom()
+  ) markMessagesRead();
   else updateUnreadCount();
 }
 
@@ -274,6 +310,68 @@ function pruneStoredHistory() {
   }
 }
 
+function resetChatLocally() {
+  chatGeneration++;
+  clearTimeout(historyExpiryTimer);
+  chatHistory = [];
+  lastReadMarker = null;
+  isFirstVisit = true;
+chatPrompt.classList.add("is-first-visit");
+chatHint.hidden = false;
+chatOpenText.textContent = "Zeptat se asistenta";
+  messages.replaceChildren();
+  isAiTyping = false;
+  sendButton.disabled = false;
+  sendButton.classList.remove("is-sending");
+  try {
+    sessionStorage.removeItem(PENDING_CHAT_MESSAGE_KEY);
+  } catch {
+    // Чат работает и без хранилища вкладки.
+  }
+  updateUnreadCount();
+  updateSuggestions();
+}
+
+function scheduleHistoryExpiry() {
+  clearTimeout(historyExpiryTimer);
+  const latest = chatHistory.at(-1);
+  if (!latest) return;
+  const remaining = Date.parse(latest.at) + CHAT_HISTORY_LIFETIME - Date.now();
+  historyExpiryTimer = setTimeout(
+    () => expireChatHistoryIfNeeded(),
+    Math.min(2_147_483_647, Math.max(0, remaining + 50))
+  );
+}
+
+function expireChatHistoryIfNeeded(showWelcome = true) {
+  const stored = readStoredHistory();
+  const latest = [stored.at(-1), chatHistory.at(-1)]
+    .filter(Boolean).sort(compareHistoryEntries).at(-1);
+  if (!latest || Date.now() - Date.parse(latest.at) < CHAT_HISTORY_LIFETIME) {
+    scheduleHistoryExpiry();
+    return false;
+  }
+
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(CHAT_MESSAGE_PREFIX)) keys.push(key);
+    }
+    for (const key of keys) localStorage.removeItem(key);
+    localStorage.removeItem(CHAT_HISTORY_KEY);
+    localStorage.removeItem(CHAT_LAST_READ_KEY);
+    localStorage.removeItem(CHAT_OPENED_KEY);
+    localStorage.setItem(CHAT_RESET_KEY, makeMessageId());
+  } catch {
+    // Даже без доступа к хранилищу устаревший разговор исчезнет в этой вкладке.
+  }
+
+  resetChatLocally();
+  if (showWelcome && chatUiState.open && !chatPanel.hidden) showWelcomeMessage();
+  return true;
+}
+
 function makeMessageId() {
   return globalThis.crypto?.randomUUID?.() ||
     `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -295,10 +393,14 @@ function rememberMessage(role, content, at = new Date().toISOString(), id = make
   }
 
   syncUnreadCount();
+  scheduleHistoryExpiry();
+  updateSuggestions();
   return entry;
 }
 
 function refreshChatHistory() {
+  if (expireChatHistoryIfNeeded()) return;
+  const wasNearBottom = isNearMessagesBottom();
   const knownIds = new Set(chatHistory.map((entry) => entry.id));
   const newEntries = readStoredHistory().filter((entry) => !knownIds.has(entry.id));
 
@@ -311,12 +413,19 @@ function refreshChatHistory() {
   chatHistory.push(...newEntries);
   chatHistory.sort(compareHistoryEntries);
   chatHistory = chatHistory.slice(-MAX_SAVED_MESSAGES);
+  if (newEntries.length && wasNearBottom && chatUiState.open && !chatPanel.hidden) {
+    requestAnimationFrame(scrollMessagesToBottom);
+  }
   syncUnreadCount();
+  scheduleHistoryExpiry();
+  updateSuggestions();
 }
 
 migrateOldHistory();
+expireChatHistoryIfNeeded();
 chatHistory = readStoredHistory();
 pruneStoredHistory();
+scheduleHistoryExpiry();
 lastReadMarker = readStoredLastReadMarker();
 if (lastReadMarker) updateUnreadCount();
 else markMessagesRead();
@@ -339,7 +448,14 @@ try {
 }
 
 window.addEventListener("storage", (event) => {
-  if (event.key?.startsWith(CHAT_MESSAGE_PREFIX)) refreshChatHistory();
+  if (event.key === CHAT_RESET_KEY) {
+    resetChatLocally();
+    if (chatUiState.open && !chatPanel.hidden) showWelcomeMessage();
+    return;
+  }
+  if (event.key?.startsWith(CHAT_MESSAGE_PREFIX) && event.newValue !== null) {
+    refreshChatHistory();
+  }
   if (event.key === CHAT_LAST_READ_KEY) {
     const marker = readStoredLastReadMarker();
     if (marker && (!lastReadMarker || compareHistoryEntries(marker, lastReadMarker) > 0)) {
@@ -350,6 +466,7 @@ window.addEventListener("storage", (event) => {
 });
 
 function getRecentContext() {
+  expireChatHistoryIfNeeded(false);
   refreshChatHistory();
   const context = [];
   let totalLength = 0;
@@ -376,6 +493,44 @@ function resizeMessageInput() {
   input.style.overflowY = neededHeight > 72 ? "auto" : "hidden";
 }
 
+let questionListOpen = false;
+
+function setQuestionListOpen(open) {
+  questionListOpen = open;
+  questionList.classList.toggle("is-open", open);
+  questionList.inert = !open;
+  questionListToggle.setAttribute("aria-expanded", String(open));
+}
+
+questionList.hidden = false;
+setQuestionListOpen(false);
+
+function updateSuggestions() {
+  const hasUserMessage = chatHistory.some((entry) => entry.role === "user");
+  const shouldShow = !hasUserMessage && !sendButton.disabled;
+  chatSuggestions.hidden = !shouldShow;
+  if (!shouldShow) setQuestionListOpen(false);
+}
+
+questionListToggle.addEventListener("click", () => {
+  setQuestionListOpen(!questionListOpen);
+});
+
+questionList.addEventListener("click", (event) => {
+  const question = event.target.closest("button[data-question]")?.dataset.question;
+  if (!question || sendButton.disabled) return;
+
+  setQuestionListOpen(false);
+  input.value = question;
+  resizeMessageInput();
+  form.requestSubmit(sendButton);
+});
+
+document.addEventListener("click", (event) => {
+  if (!questionListOpen || questionListToggle.contains(event.target)) return;
+  setQuestionListOpen(false);
+});
+
 input.addEventListener("input", resizeMessageInput);
 
 input.addEventListener("keydown", (event) => {
@@ -389,17 +544,25 @@ const chatMotionReduced = window.matchMedia("(prefers-reduced-motion: reduce)");
 let chatIsClosing = false;
 
 chatOpen.addEventListener("click", () => {
+  expireChatHistoryIfNeeded(false);
   chatPanel.hidden = false;
   chatPrompt.hidden = true;
   chatUiState.open = true;
+  isFirstVisit = false;
+try {
+  localStorage.setItem(CHAT_OPENED_KEY, "1");
+} catch {
+  // Чат работает и без этой отметки.
+}
   saveChatOpenState();
   chatPrompt.classList.remove("is-first-visit");
   chatHint.hidden = true;
   chatOpenText.textContent = "Váš AI asistent";
   markMessagesRead();
 
-  const hadMessages = messages.childElementCount > 0;
+  const hadMessages = messages.querySelector(".chat-message") !== null;
   showWelcomeMessage();
+  updateSuggestions();
 
   if (!chatMotionReduced.matches) {
     chatPanel.animate(
@@ -504,10 +667,26 @@ function scrollMessagesToBottom() {
   });
 }
 
+newMessagesButton.addEventListener("click", scrollMessagesToBottom);
+
+messages.addEventListener("scroll", () => {
+  if (isNearMessagesBottom()) syncUnreadCount();
+  else updateInChatNotice();
+}, { passive: true });
+
+function refreshChatAfterReturn() {
+  expireChatHistoryIfNeeded();
+  syncUnreadCount();
+}
+
+window.addEventListener("focus", refreshChatAfterReturn);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") refreshChatAfterReturn();
+});
+
 function showMessage(author, text, at = new Date().toISOString(), restored = false) {
   const isUser = author === "Vy";
-  const isNearBottom =
-    messages.scrollHeight - messages.scrollTop - messages.clientHeight < 96;
+  const isNearBottom = isNearMessagesBottom();
   const row = document.createElement("div");
   row.className = `chat-message ${isUser ? "chat-message--user" : "chat-message--ai"}`;
   if (restored) row.classList.add("chat-message--restored");
@@ -662,19 +841,23 @@ function finishTypingMessage(row, text) {
 }
 
 function showWelcomeMessage() {
-  if (messages.childElementCount > 0) return;
+  if (messages.querySelector(".chat-message")) return;
 
+  const generation = chatGeneration;
   sendButton.disabled = true;
   isAiTyping = true;
   updateLauncherStatus();
+  updateSuggestions();
   const row = showTypingMessage();
 
   setTimeout(() => {
-    if (chatHistory.some((entry) => entry.role === "welcome")) {
+    if (generation !== chatGeneration) return;
+    if (chatHistory.some((entry) => entry.role === "welcome" || entry.role === "user")) {
       row.remove();
       isAiTyping = false;
       updateLauncherStatus();
       sendButton.disabled = false;
+      updateSuggestions();
       return;
     }
 
@@ -686,6 +869,7 @@ function showWelcomeMessage() {
     isAiTyping = false;
     updateLauncherStatus();
     sendButton.disabled = false;
+    updateSuggestions();
   }, 2000);
 }
 
@@ -701,9 +885,11 @@ form.addEventListener("submit", async (event) => {
   }
 
   const history = getRecentContext();
+  const generation = chatGeneration;
   sendButton.disabled = true;
   isAiTyping = true;
   updateLauncherStatus();
+  updateSuggestions();
   sendButton.classList.add("is-sending");
   const userRow = showMessage("Vy", message);
   const userEntry = rememberMessage("user", message, userRow.querySelector("time").dateTime);
@@ -718,6 +904,10 @@ form.addEventListener("submit", async (event) => {
 
   const typingRowPromise = new Promise((resolve) => {
     setTimeout(() => {
+      if (generation !== chatGeneration) {
+        resolve({ row: null, shownAt: performance.now() });
+        return;
+      }
       resolve({
         row: showTypingMessage(),
         shownAt: performance.now()
@@ -775,9 +965,17 @@ form.addEventListener("submit", async (event) => {
     reply = limitMessageLength(reply);
 
     const { row, shownAt } = await typingRowPromise;
+    if (generation !== chatGeneration || !row) {
+      row?.remove();
+      return;
+    }
     const remaining = Math.max(0, 400 - (performance.now() - shownAt));
     if (remaining > 0) {
       await new Promise((resolve) => setTimeout(resolve, remaining));
+    }
+    if (generation !== chatGeneration) {
+      row.remove();
+      return;
     }
 
     finishTypingMessage(row, reply);
@@ -798,11 +996,14 @@ form.addEventListener("submit", async (event) => {
     }
     placeHistoryRow(row, replyEntry);
   } finally {
-    isAiTyping = false;
-    updateLauncherStatus();
-    sendButton.disabled = false;
-    sendButton.classList.remove("is-sending");
-    input.focus({ preventScroll: true });
+    if (generation === chatGeneration) {
+      isAiTyping = false;
+      updateLauncherStatus();
+      sendButton.disabled = false;
+      sendButton.classList.remove("is-sending");
+      updateSuggestions();
+      input.focus({ preventScroll: true });
+    }
   }
 });
 
@@ -836,6 +1037,8 @@ for (const entry of chatHistory) {
   const row = showMessage(author, entry.content, entry.at, true);
   placeHistoryRow(row, entry);
 }
+
+updateSuggestions();
 
 setChatExpanded(chatUiState.expanded);
 
