@@ -370,7 +370,7 @@ box-shadow:
   border: 1px solid #36454f;
   border-radius: 999px;
   background: white;
-  transition: border-color 0.5s ease, color 0.5s ease;
+  transition: border-color 280ms ease, color 280ms ease;
 }
 
 #chat-expand:hover:not(:disabled) .chat-control-face,
@@ -756,6 +756,138 @@ color: #234f4b;
   box-shadow: 0 8px 20px rgba(25, 40, 48, .18);
 }
 
+#chat-panel .chat-suggestions__intro {
+  display: none;
+}
+
+#chat-panel .chat-quick-actions {
+  position: absolute;
+  left: -60px;
+  bottom: 18px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: 48px;
+  gap: 8px;
+}
+
+#chat-panel #chat-help {
+  order: -1;
+}
+
+@keyframes chat-action-pop {
+  0%   { opacity: 0; scale: .55; }
+  70%  { opacity: 1; scale: 1.08; }
+  100% { opacity: 1; scale: 1; }
+}
+
+#chat-panel:not([hidden]) #chat-settings {
+  animation: chat-action-pop 420ms ease-out 100ms both;
+}
+
+#chat-panel:not([hidden]) #chat-help:not([hidden]) {
+  animation: chat-action-pop 420ms ease-out 320ms both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #chat-panel:not([hidden]) #chat-settings,
+  #chat-panel:not([hidden]) #chat-help:not([hidden]) {
+    animation: none;
+  }
+}
+
+#chat-panel .chat-quick-actions[hidden] {
+  display: none;
+}
+
+#chat-panel .chat-quick-actions__button {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, .8);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .5);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 8px 24px rgba(25, 40, 48, .18);
+  color: #284c4a;
+  transition: background-color 200ms ease, color 200ms ease, transform 200ms ease;
+}
+
+#chat-panel .chat-quick-actions__button:hover:not(:disabled),
+#chat-panel .chat-quick-actions__button:focus-visible,
+#chat-panel #chat-help[aria-expanded="true"] {
+  background: rgba(248, 255, 254, .95);
+  color: #007d74;
+  transform: translateY(-2px);
+}
+
+#chat-panel .chat-quick-actions__button:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+#chat-panel .chat-quick-actions__button svg {
+  width: 23px;
+  height: 23px;
+}
+
+#chat-panel #chat-help::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 255, 255, .8);
+  border-radius: 999px;
+  background: rgba(240, 249, 247, .94);
+  box-shadow: 0 8px 20px rgba(25, 40, 48, .16);
+  color: #284c4a;
+  font: 700 12px/1.3 "Jost", sans-serif;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-4px, -50%);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+#chat-panel #chat-help:not(:disabled)[aria-expanded="false"]:hover::after,
+#chat-panel #chat-help:not(:disabled)[aria-expanded="false"]:focus-visible::after,
+#chat-panel #chat-help:not(:disabled)[aria-expanded="false"].show-hint::after {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+#chat-panel .chat-quick-actions .chat-suggestions__list {
+  right: auto;
+  left: 0;
+  bottom: calc(100% + 10px);
+  max-height: min(55vh, 390px);
+  transform-origin: bottom left;
+}
+
+#chat-panel .chat-quick-actions .chat-suggestions__intro {
+  display: grid;
+  gap: 3px;
+  margin: 0 2px 5px;
+  color: #284c4a;
+  font: 400 13px/1.35 "Jost", sans-serif;
+}
+
+#chat-panel .chat-suggestions__intro strong {
+  font-size: 16px;
+}
+
+@media (max-width: 620px) {
+  #chat-panel .chat-quick-actions {
+    left: 18px;
+    bottom: 115px;
+  }
+}
+
 @media (max-width: 520px) {
   #chat-panel .chat-new-messages { right: 18px; bottom: 115px; }
   #chat-panel .chat-suggestions { margin-right: 2px; }
@@ -765,6 +897,8 @@ color: #234f4b;
   #chat-panel .chat-new-messages,
   #chat-panel .chat-suggestions,
   .chat-new-messages__dots span { animation: none; }
+  #chat-panel .chat-quick-actions__button,
+  #chat-panel #chat-help::after { transition: none; }
 }
 
 #chat-panel #chat-form {
@@ -879,9 +1013,9 @@ line-height: 1;
 }
 
 #chat-panel #send {
-  transition: background-color 0.5s ease,
-              border-color 0.5s ease,
-              color 0.5s ease;
+  transition: background-color 280ms ease,
+              border-color 280ms ease,
+              color 280ms ease;
 }
 
 #chat-panel #send span {
@@ -1207,6 +1341,7 @@ line-height: 1;
   border: 1px solid rgba(255, 255, 255, 0.9);
   background: rgba(255, 255, 255, 0.7);
   box-shadow: 0 2px 8px rgba(25, 40, 48, 0.1);
+  transition: background-color 280ms ease;
 }
 
 .chat-control-face {
@@ -1222,7 +1357,7 @@ line-height: 1;
 
 #chat-expand:hover:not(:disabled),
 #chat-close:hover {
-  background: white;
+  background-color: white;
 }
 
 /* Сообщения уходят под верхнюю шапку */

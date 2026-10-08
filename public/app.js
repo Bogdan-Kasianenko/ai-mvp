@@ -18,6 +18,8 @@ const newMessagesDots = newMessagesButton.querySelector(".chat-new-messages__dot
 const chatSuggestions = document.querySelector("#chat-suggestions");
 const questionListToggle = document.querySelector("#question-list-toggle");
 const questionList = document.querySelector("#question-list");
+const chatQuickActions = document.querySelector("#chat-quick-actions");
+const chatHelpButton = document.querySelector("#chat-help");
 
 const CHAT_OPENED_KEY = "autoservice-chat-opened-v2";
 let isFirstVisit = false;
@@ -143,11 +145,13 @@ const CHAT_MESSAGE_PREFIX = "autoservice-chat-message-v1:";
 const PENDING_CHAT_MESSAGE_KEY = "autoservice-chat-pending-v1";
 const CHAT_LAST_READ_KEY = "autoservice-chat-last-read-v1";
 const CHAT_RESET_KEY = "autoservice-chat-reset-v1";
+const CHAT_INTAKE_KEY = "autoservice-chat-intake-v1";
 const CHAT_HISTORY_LIFETIME = 24 * 60 * 60 * 1000;
 const MAX_SAVED_MESSAGES = 50;
 const MAX_MESSAGE_LENGTH = 20000;
 const TRUNCATION_NOTICE = "\n\n[Zpráva byla zkrácena.]";
 let chatHistory = [];
+let intakeState = null;
 let lastReadMarker = null;
 let chatGeneration = 0;
 let historyExpiryTimer;
@@ -314,6 +318,7 @@ function resetChatLocally() {
   chatGeneration++;
   clearTimeout(historyExpiryTimer);
   chatHistory = [];
+  intakeState = null;
   lastReadMarker = null;
   isFirstVisit = true;
 chatPrompt.classList.add("is-first-visit");
@@ -325,6 +330,7 @@ chatOpenText.textContent = "Zeptat se asistenta";
   sendButton.classList.remove("is-sending");
   try {
     sessionStorage.removeItem(PENDING_CHAT_MESSAGE_KEY);
+    localStorage.removeItem(CHAT_INTAKE_KEY);
   } catch {
     // Чат работает и без хранилища вкладки.
   }
@@ -362,6 +368,7 @@ function expireChatHistoryIfNeeded(showWelcome = true) {
     localStorage.removeItem(CHAT_HISTORY_KEY);
     localStorage.removeItem(CHAT_LAST_READ_KEY);
     localStorage.removeItem(CHAT_OPENED_KEY);
+    localStorage.removeItem(CHAT_INTAKE_KEY);
     localStorage.setItem(CHAT_RESET_KEY, makeMessageId());
   } catch {
     // Даже без доступа к хранилищу устаревший разговор исчезнет в этой вкладке.
@@ -424,11 +431,17 @@ function refreshChatHistory() {
 migrateOldHistory();
 expireChatHistoryIfNeeded();
 chatHistory = readStoredHistory();
+try {
+  if (chatHistory.some((entry) => entry.role === "user")) {
+    intakeState = JSON.parse(localStorage.getItem(CHAT_INTAKE_KEY) || "null");
+  }
+} catch {
+  intakeState = null;
+}
 pruneStoredHistory();
 scheduleHistoryExpiry();
 lastReadMarker = readStoredLastReadMarker();
-if (lastReadMarker) updateUnreadCount();
-else markMessagesRead();
+updateUnreadCount();
 
 try {
   const pendingId = sessionStorage.getItem(PENDING_CHAT_MESSAGE_KEY);
@@ -463,6 +476,13 @@ window.addEventListener("storage", (event) => {
       syncUnreadCount();
     }
   }
+  if (event.key === CHAT_INTAKE_KEY) {
+    try {
+      intakeState = JSON.parse(event.newValue || "null");
+    } catch {
+      intakeState = null;
+    }
+  }
 });
 
 function getRecentContext() {
@@ -495,25 +515,82 @@ function resizeMessageInput() {
 
 let questionListOpen = false;
 
+let helpHintTimer;
+let helpHintDismissed = false;
+let helpHoverStartedAt = null;
+
+function hideHelpHint() {
+  clearTimeout(helpHintTimer);
+  chatHelpButton.classList.remove("show-hint");
+}
+
+function scheduleHelpHint() {
+  hideHelpHint();
+  if (helpHintDismissed || chatHistory.some((entry) => entry.role === "user")) return;
+
+  helpHintTimer = setTimeout(() => {
+    if (
+      chatPanel.hidden ||
+      questionListOpen ||
+      chatHelpButton.disabled ||
+      chatHistory.some((entry) => entry.role === "user")
+    ) return;
+
+    chatHelpButton.classList.add("show-hint");
+  }, 5000);
+}
+
 function setQuestionListOpen(open) {
+  if (open) {
+  helpHintDismissed = true;
+  hideHelpHint();
+}
   questionListOpen = open;
   questionList.classList.toggle("is-open", open);
   questionList.inert = !open;
   questionListToggle.setAttribute("aria-expanded", String(open));
+  chatHelpButton.setAttribute("aria-expanded", String(open));
 }
 
 questionList.hidden = false;
 setQuestionListOpen(false);
 
 function updateSuggestions() {
-  const hasUserMessage = chatHistory.some((entry) => entry.role === "user");
-  const shouldShow = !hasUserMessage && !sendButton.disabled;
-  chatSuggestions.hidden = !shouldShow;
-  if (!shouldShow) setQuestionListOpen(false);
+  if (questionList.parentElement !== chatQuickActions) {
+    setQuestionListOpen(false);
+    chatQuickActions.append(questionList);
+  }
+
+  chatSuggestions.hidden = true;
+  chatQuickActions.hidden = false;
+  chatHelpButton.hidden = false;
+  chatHelpButton.disabled = sendButton.disabled;
+
+  if (sendButton.disabled) setQuestionListOpen(false);
 }
 
 questionListToggle.addEventListener("click", () => {
   setQuestionListOpen(!questionListOpen);
+});
+
+chatHelpButton.addEventListener("click", () => {
+  setQuestionListOpen(!questionListOpen);
+});
+
+chatHelpButton.addEventListener("mouseenter", () => {
+  helpHoverStartedAt = performance.now();
+});
+
+chatHelpButton.addEventListener("mouseleave", () => {
+  if (
+    helpHoverStartedAt !== null &&
+    performance.now() - helpHoverStartedAt >= 1000
+  ) {
+    helpHintDismissed = true;
+    hideHelpHint();
+  }
+
+  helpHoverStartedAt = null;
 });
 
 questionList.addEventListener("click", (event) => {
@@ -527,17 +604,41 @@ questionList.addEventListener("click", (event) => {
 });
 
 document.addEventListener("click", (event) => {
-  if (!questionListOpen || questionListToggle.contains(event.target)) return;
+  // Клик по кнопке открытия чата должен запустить таймер подсказки.
+  if (chatHelpButton.classList.contains("show-hint")) {
+  helpHintDismissed = true;
+  hideHelpHint();
+}
+
+  if (
+    !questionListOpen ||
+    questionListToggle.contains(event.target) ||
+    chatHelpButton.contains(event.target) ||
+    questionList.contains(event.target)
+  ) return;
+
   setQuestionListOpen(false);
 });
 
 input.addEventListener("input", resizeMessageInput);
 
+function animateManualSend() {
+  const message = input.value.trim();
+  if (!sendButton.disabled && message && message.length <= 1000) {
+    sendButton.classList.add("is-sending");
+  }
+}
+
+sendButton.addEventListener("click", animateManualSend);
+
 input.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
 
   event.preventDefault();
-  if (!sendButton.disabled) form.requestSubmit(sendButton);
+  if (!sendButton.disabled) {
+  animateManualSend();
+  form.requestSubmit(sendButton);
+}
 });
 
 const chatMotionReduced = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -563,6 +664,7 @@ try {
   const hadMessages = messages.querySelector(".chat-message") !== null;
   showWelcomeMessage();
   updateSuggestions();
+  scheduleHelpHint();
 
   if (!chatMotionReduced.matches) {
     chatPanel.animate(
@@ -604,6 +706,8 @@ const chatExpand = document.querySelector("#chat-expand");
 chatClose.addEventListener("click", async () => {
   if (chatIsClosing) return;
   chatIsClosing = true;
+  hideHelpHint();
+  setQuestionListOpen(false);
   chatUiState.open = false;
   saveChatOpenState();
 
@@ -879,18 +983,26 @@ form.addEventListener("submit", async (event) => {
 
   const message = input.value.trim();
 
-  if (!message || message.length > 1000) {
-    showMessage("AI asistent", "Zadejte zprávu o délce 1 až 1000 znaků.");
-    return;
-  }
+messages
+  .querySelectorAll(".chat-message--validation-error")
+  .forEach((row) => row.remove());
+
+if (!message || message.length > 1000) {
+  const errorRow = showMessage(
+    "AI asistent",
+    "Zadejte zprávu o délce 1 až 1000 znaků."
+  );
+  errorRow.classList.add("chat-message--validation-error");
+  return;
+}
 
   const history = getRecentContext();
+  const intake = intakeState;
   const generation = chatGeneration;
   sendButton.disabled = true;
   isAiTyping = true;
   updateLauncherStatus();
   updateSuggestions();
-  sendButton.classList.add("is-sending");
   const userRow = showMessage("Vy", message);
   const userEntry = rememberMessage("user", message, userRow.querySelector("time").dateTime);
   placeHistoryRow(userRow, userEntry);
@@ -917,6 +1029,7 @@ form.addEventListener("submit", async (event) => {
 
   try {
     let reply;
+    let nextIntake = null;
     let replyRole = "assistant";
 
     try {
@@ -927,7 +1040,7 @@ form.addEventListener("submit", async (event) => {
         response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, history }),
+          body: JSON.stringify({ message, history, intake }),
           signal: AbortSignal.timeout(30000)
         });
 
@@ -957,6 +1070,7 @@ form.addEventListener("submit", async (event) => {
       }
 
       reply = data.reply;
+      nextIntake = data.intake;
     } catch (error) {
       replyRole = "error";
       reply = error.message || "Zprávu se nepodařilo odeslat. Zkuste to znovu.";
@@ -976,6 +1090,15 @@ form.addEventListener("submit", async (event) => {
     if (generation !== chatGeneration) {
       row.remove();
       return;
+    }
+
+    if (replyRole === "assistant" && nextIntake && typeof nextIntake === "object") {
+      intakeState = nextIntake;
+      try {
+        localStorage.setItem(CHAT_INTAKE_KEY, JSON.stringify(nextIntake));
+      } catch {
+        // Chat může pokračovat i bez trvalého uložení stavu.
+      }
     }
 
     finishTypingMessage(row, reply);
@@ -1020,11 +1143,18 @@ async function loadCompany() {
 
     for (const service of company.services) {
       const item = document.createElement("li");
-      const price = service.price === null
-        ? "cena bude upřesněna"
-        : `${service.price} Kč`;
-
-      item.textContent = `${service.name} — ${price}`;
+      item.textContent = service.price === null
+        ? service.name
+        : `${service.name} — ${service.price} Kč`;
+      if (Array.isArray(service.options) && service.options.length > 0) {
+        const details = document.createElement("small");
+        details.textContent = service.options.map((option) =>
+          option.priceFrom === null
+            ? option.name
+            : `${option.name} — od ${option.priceFrom} Kč`
+        ).join(" · ");
+        item.append(document.createElement("br"), details);
+      }
       services.append(item);
     }
   } catch {
@@ -1048,8 +1178,9 @@ if (chatUiState.open) {
   chatPrompt.classList.remove("is-first-visit");
   chatHint.hidden = true;
   chatOpenText.textContent = "Váš AI asistent";
-  markMessagesRead();
+  syncUnreadCount();
   showWelcomeMessage();
+  scheduleHelpHint();
   requestAnimationFrame(() => {
     messages.scrollTop = messages.scrollHeight;
   });

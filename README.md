@@ -27,13 +27,21 @@ Open http://127.0.0.1:3000. The server listens only on this computer.
   on the next visit (or while the page remains open). Messages over 20,000
   characters are visibly shortened before display and storage. The app does not
   store chat history on its server.
+- The browser also keeps a structured, unsent service-request draft with known
+  vehicle, problem, and customer details. The server validates this draft on each
+  chat request and returns updated fields and a list of missing required details.
+  Engine, mileage, and last oil-change date are optional. No lead is created.
+- `company.json` lists individual tasks within each service. Each task has its
+  own `priceFrom` field, currently null until a real starting price is confirmed;
+  the assistant must not invent an estimate or apply one task's price to another.
 - A fresh conversation offers six suggested questions. If an answer arrives
   while the visitor is reading earlier messages, a button shows the unread count
   and scrolls to the newest reply.
 - The browser also remembers whether the chat is open and whether the desktop
   chat is expanded.
-- The page tells visitors that messages are sent to OpenAI and asks them not
-  to enter personal details during this demo.
+- The page tells visitors that a phone number or email may be included in a
+  draft, and that chat messages are sent to OpenAI and stored in the browser.
+  It asks visitors not to include other sensitive details.
 - The browser shows a typing state and a message if the AI request fails.
 
 ## Manual checks

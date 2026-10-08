@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { getReply } from "./service.mjs";
+import { normalizeIntakeState, missingIntakeFields } from "./intake.mjs";
 import express from "express";
 import { fileURLToPath } from "node:url";
 import { APIConnectionError, APIConnectionTimeoutError, InternalServerError } from "openai";
@@ -66,23 +67,52 @@ app.post("/api/chat", async (request, response) => {
     role,
     content: content.trim()
   }));
-  const company = await loadCompanyData();
-  const result = await getReply(message, company, cleanHistory);
+  const abortController = new AbortController();
+  const onResponseClose = () => {
+    if (!response.writableEnded) abortController.abort();
+  };
+  response.on("close", onResponseClose);
 
-  if (result.kind === "refusal") {
+  try {
+    const company = await loadCompanyData();
+    if (abortController.signal.aborted) return;
+
+    const intake = normalizeIntakeState(request.body?.intake, company);
+
+    const result = await getReply(
+      message,
+      company,
+      cleanHistory,
+      intake,
+      abortController.signal
+    );
+    if (abortController.signal.aborted) return;
+
+    if (result.kind === "refusal") {
+      return response.json({
+        reply: "S tímto požadavkem Vám nemohu pomoci. Můžete se zeptat na něco jiného.",
+        refused: true
+      });
+    }
+
+    if (typeof result.text !== "string" || !result.text.trim()) {
+      return response.status(502).json({
+        error: "AI asistent nyní nemůže odpovědět. Zkuste to prosím později."
+      });
+    }
+
+    const nextIntake = normalizeIntakeState(result.intake, company);
     return response.json({
-      reply: "S tímto požadavkem Vám nemohu pomoci. Můžete se zeptat na něco jiného.",
-      refused: true
+      reply: result.text,
+      intake: nextIntake,
+      missingFields: missingIntakeFields(nextIntake)
     });
+  } catch (error) {
+    if (abortController.signal.aborted) return;
+    throw error;
+  } finally {
+    response.off("close", onResponseClose);
   }
-
-  if (typeof result.text !== "string" || !result.text.trim()) {
-    return response.status(502).json({
-      error: "AI asistent nyní nemůže odpovědět. Zkuste to prosím později."
-    });
-  }
-
-  return response.json({ reply: result.text });
 });
 
 app.use((error, request, response, next) => {
@@ -94,6 +124,11 @@ app.use((error, request, response, next) => {
   }
   if (error.type === "charset.unsupported" || error.type === "encoding.unsupported") {
     return response.status(415).json({ error: "Nepodporované kódování požadavku." });
+  }
+    if (error.status === 400 && error.expose === true) {
+    return response.status(400).json({
+      error: "Neplatné tělo požadavku."
+    });
   }
   if (error instanceof APIConnectionTimeoutError) {
     return response.status(503).json({

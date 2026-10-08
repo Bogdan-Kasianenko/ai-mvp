@@ -88,6 +88,7 @@
       <button id="question-list-toggle" class="chat-suggestions__toggle" type="button"
         aria-expanded="false" aria-controls="question-list">Vybrat otázku ze seznamu</button>
       <div id="question-list" class="chat-suggestions__list" hidden>
+        <p class="chat-suggestions__intro"><strong>Na cokoliv!</strong><span>Ale tady máte přehled nejpopulárnějších otázek.</span></p>
         <button type="button" data-question="Jaké služby nabízíte?">Jaké služby nabízíte?</button>
         <button type="button" data-question="Jak probíhá diagnostika auta?">Jak probíhá diagnostika auta?</button>
         <button type="button" data-question="Kolik stojí diagnostika?">Kolik stojí diagnostika?</button>
@@ -96,6 +97,21 @@
         <button type="button" data-question="Jak se připravit na diagnostiku?">Jak se připravit na diagnostiku?</button>
       </div>
     </div>
+
+  <div id="chat-quick-actions" class="chat-quick-actions" hidden>
+    <button id="chat-settings" class="chat-quick-actions__button" type="button"
+      aria-label="Nastavení připravujeme" title="Nastavení připravujeme" disabled>
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+    </button>
+    <button id="chat-help" class="chat-quick-actions__button chat-quick-actions__button--help" type="button"
+      aria-label="Na co se můžu zeptat?" aria-expanded="false" aria-controls="question-list"
+      data-tooltip="Na co se můžu zeptat?">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 18h6M10 21h4M8.5 15.5C7 14.3 6 12.5 6 10.5a6 6 0 0 1 12 0c0 2-1 3.8-2.5 5L15 17H9l-.5-1.5Z"/>
+        <path d="M12 2V1M4.5 4.5l-.8-.8M19.5 4.5l.8-.8"/>
+      </svg>
+    </button>
+  </div>
 
   <form id="chat-form">
   <label for="message">Vaše zpráva</label>
@@ -107,8 +123,7 @@
 </form>
 
 </section>
-    <p class="note">Testovací verze. Nezadávejte jméno, telefon ani jiné osobní údaje. Zprávy se posílají službě OpenAI pro vytvoření odpovědi. Historie chatu se ukládá v tomto prohlížeči; po 24 hodinách bez další zprávy se při příští návštěvě smaže. Demo ji neukládá na svém serveru.</p>
-  </main>
+  <p class="note">Testovací verze. Při přípravě návrhu můžete uvést telefon nebo e-mail. Zprávy a údaje návrhu včetně kontaktu se posílají službě OpenAI pro vytvoření odpovědi a ukládají se v tomto prohlížeči; po 24 hodinách bez další zprávy se smažou. Demo žádost autoservisu neodesílá ani ji neukládá na svém serveru. Neuvádějte další citlivé údaje.</p>  </main>
   <div id="chat-unread-status" class="sr-only" role="status" aria-atomic="true"></div>
 </body>
 </html>
