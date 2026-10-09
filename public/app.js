@@ -1143,9 +1143,11 @@ async function loadCompany() {
 
     for (const service of company.services) {
       const item = document.createElement("li");
-      item.textContent = service.price === null
-        ? service.name
-        : `${service.name} — ${service.price} Kč`;
+      item.textContent = Number.isFinite(service.priceFrom)
+  ? `${service.name} — od ${service.priceFrom} Kč`
+  : Number.isFinite(service.price)
+    ? `${service.name} — ${service.price} Kč`
+    : service.name;
       if (Array.isArray(service.options) && service.options.length > 0) {
         const details = document.createElement("small");
         details.textContent = service.options.map((option) =>

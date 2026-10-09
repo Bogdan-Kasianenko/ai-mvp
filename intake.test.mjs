@@ -75,7 +75,7 @@ test("brake jobs have separate, still unconfirmed prices", () => {
   const brakes = company.services.find((service) => service.id === "brakes");
   assert.deepEqual(
     brakes.options.map((option) => option.id),
-    ["brake_inspection", "brake_pads", "brake_discs", "brake_fluid"]
+    ["brake_inspection", "brake_pads", "brake_discs", "brake_discs_pads", "brake_fluid"]
   );
   assert.ok(brakes.options.every((option) => option.priceFrom === null));
 });

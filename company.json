@@ -3,79 +3,177 @@
   "services": [
     {
       "id": "diagnostics",
-      "name": "Diagnostika a prvotní kontrola závady",
-      "price": null,
-      "options": [
-        { "id": "fault_codes", "name": "Načtení chybových hlášení řídicí jednotky", "priceFrom": null },
-        { "id": "initial_inspection", "name": "Prvotní kontrola varovných kontrolek a popsaných příznaků", "priceFrom": null }
-      ]
+      "name": "Diagnostika vozidla",
+      "description": "Načtení chybových hlášení a prvotní kontrola příznaků tvoří jednu službu.",
+      "priceFrom": null,
+      "requiresParts": false,
+      "options": []
     },
     {
       "id": "scheduled_maintenance",
       "name": "Pravidelné servisní prohlídky",
-      "price": null,
+      "priceFrom": null,
       "options": [
-        { "id": "annual_service", "name": "Roční servisní prohlídka", "priceFrom": null },
-        { "id": "scheduled_oil_filters", "name": "Výměna motorového oleje a filtrů", "priceFrom": null },
-        { "id": "whole_car_check", "name": "Celková kontrola vozu", "priceFrom": null }
+        {
+          "id": "annual_service",
+          "name": "Roční servisní prohlídka",
+          "priceFrom": null,
+          "requiresParts": false
+        }
       ]
     },
     {
       "id": "oil_filters",
-      "name": "Výměna motorového oleje a filtrů",
-      "price": null,
+      "name": "Výměna oleje a filtrů",
+      "priceFrom": null,
       "options": [
-        { "id": "engine_oil", "name": "Výměna motorového oleje", "priceFrom": null },
-        { "id": "filters", "name": "Výměna olejového, vzduchového nebo kabinového filtru", "priceFrom": null }
+        {
+          "id": "engine_oil",
+          "name": "Výměna motorového oleje a olejového filtru",
+          "priceFrom": null,
+          "requiresParts": true
+        },
+        {
+          "id": "filters",
+          "name": "Výměna vzduchového nebo kabinového filtru",
+          "priceFrom": null,
+          "requiresParts": true
+        }
       ]
     },
     {
       "id": "brakes",
       "name": "Servis brzd",
-      "price": null,
+      "priceFrom": null,
       "options": [
-        { "id": "brake_inspection", "name": "Kontrola stavu brzd", "priceFrom": null },
-        { "id": "brake_pads", "name": "Výměna brzdových destiček", "priceFrom": null },
-        { "id": "brake_discs", "name": "Výměna brzdových kotoučů", "priceFrom": null },
-        { "id": "brake_fluid", "name": "Výměna brzdové kapaliny", "priceFrom": null }
+        {
+          "id": "brake_inspection",
+          "name": "Kontrola stavu brzd",
+          "priceFrom": null,
+          "requiresParts": false
+        },
+        {
+          "id": "brake_pads",
+          "name": "Výměna brzdových destiček",
+          "priceFrom": null,
+          "requiresParts": true
+        },
+        {
+          "id": "brake_discs",
+          "name": "Výměna brzdových kotoučů",
+          "priceFrom": null,
+          "requiresParts": true
+        },
+        {
+          "id": "brake_discs_pads",
+          "name": "Výměna brzdových kotoučů a destiček",
+          "priceFrom": null,
+          "requiresParts": true
+        },
+        {
+          "id": "brake_fluid",
+          "name": "Výměna brzdové kapaliny",
+          "priceFrom": null,
+          "requiresParts": true
+        }
       ]
     },
     {
       "id": "tires",
       "name": "Pneuservis",
-      "price": null,
+      "priceFrom": null,
       "options": [
-        { "id": "seasonal_tires", "name": "Sezónní přezutí pneumatik", "priceFrom": null },
-        { "id": "wheel_balancing", "name": "Vyvážení kol", "priceFrom": null },
-        { "id": "tread_check", "name": "Kontrola hloubky dezénu", "priceFrom": null }
+        {
+          "id": "seasonal_tires",
+          "name": "Přezutí 4 pneumatik včetně vyvážení",
+          "priceFrom": 1450,
+          "requiresParts": false
+        },
+        {
+          "id": "wheel_swap",
+          "name": "Výměna 4 kompletních kol včetně vyvážení",
+          "priceFrom": 1000,
+          "requiresParts": false
+        },
+        {
+          "id": "tread_check",
+          "name": "Kontrola hloubky dezénu",
+          "priceFrom": null,
+          "requiresParts": false
+        }
       ]
     },
     {
       "id": "chassis",
       "name": "Kontrola podvozku",
-      "price": null,
+      "priceFrom": null,
       "options": [
-        { "id": "chassis_inspection", "name": "Kontrola podvozku při popsaných potížích", "priceFrom": null }
+        {
+          "id": "chassis_inspection",
+          "name": "Kontrola podvozku při popsaných potížích",
+          "priceFrom": null,
+          "requiresParts": false
+        }
       ]
     },
     {
       "id": "air_conditioning",
       "name": "Servis klimatizace",
-      "price": null,
+      "priceFrom": null,
       "options": [
-        { "id": "refrigerant", "name": "Doplnění chladiva", "priceFrom": null },
-        { "id": "ac_disinfection", "name": "Dezinfekce klimatizace", "priceFrom": null },
-        { "id": "cabin_filter", "name": "Výměna kabinového filtru", "priceFrom": null }
+        {
+          "id": "refrigerant",
+          "name": "Kontrola a plnění klimatizace",
+          "priceFrom": null,
+          "requiresParts": true
+        },
+        {
+          "id": "ac_disinfection",
+          "name": "Dezinfekce klimatizace",
+          "priceFrom": null,
+          "requiresParts": true
+        }
       ]
     },
     {
       "id": "auto_glass",
       "name": "Opravy a výměna autoskel",
-      "price": null,
+      "priceFrom": null,
       "options": [
-        { "id": "glass_crack", "name": "Posouzení a oprava praskliny", "priceFrom": null },
-        { "id": "windshield", "name": "Výměna poškozeného čelního skla", "priceFrom": null }
+        {
+          "id": "glass_crack",
+          "name": "Posouzení a oprava praskliny",
+          "priceFrom": null,
+          "requiresParts": true
+        },
+        {
+          "id": "windshield",
+          "name": "Výměna poškozeného čelního skla",
+          "priceFrom": null,
+          "requiresParts": true
+        }
       ]
+    },
+    {
+      "id": "timing_belt",
+      "name": "Výměna rozvodů a vodní pumpy",
+      "priceFrom": null,
+      "requiresParts": true,
+      "options": []
+    },
+    {
+      "id": "clutch",
+      "name": "Výměna spojkové sady",
+      "priceFrom": null,
+      "requiresParts": true,
+      "options": []
+    },
+    {
+      "id": "wheel_alignment",
+      "name": "Geometrie kol",
+      "priceFrom": null,
+      "requiresParts": false,
+      "options": []
     }
   ]
 }
