@@ -26,6 +26,8 @@ const skippedFields = [
 
 const intakeSchema = objectSchema({
   intent: { type: "string", enum: ["general", "service_discussion", "service_request"] },
+  customerParts: { type: ["boolean", "null"] },
+  additionalServicesReviewed: { type: "boolean" },
   serviceId: nullableText,
   serviceOptionId: nullableText,
   requestedWork: nullableText,
@@ -34,7 +36,8 @@ const intakeSchema = objectSchema({
     model: nullableText,
     year: nullableText,
     engine: nullableText,
-    mileage: nullableText
+    mileage: nullableText,
+    windshieldSensors: { type: ["boolean", "null"] }
   }),
   problem: objectSchema({
     description: nullableText,
@@ -54,16 +57,30 @@ const intakeSchema = objectSchema({
 
 export const intakeResponseSchema = objectSchema({
   reply: { type: "string" },
-  intake: intakeSchema
+  needsClarification: { type: "boolean" },
+  intake: intakeSchema,
+  submissionAction: {
+  type: "string",
+  enum: ["none", "confirm_send", "decline_send", "ask_status"]
+}
 });
 
 export function emptyIntakeState() {
   return {
     intent: "general",
+    customerParts: null,
+    additionalServicesReviewed: false,
     serviceId: null,
     serviceOptionId: null,
     requestedWork: null,
-    vehicle: { brand: null, model: null, year: null, engine: null, mileage: null },
+    vehicle: {
+  brand: null,
+  model: null,
+  year: null,
+  engine: null,
+  mileage: null,
+  windshieldSensors: null
+},
     problem: {
       description: null,
       when: null,
@@ -90,7 +107,12 @@ export function normalizeIntakeState(value, company) {
   if (["general", "service_discussion", "service_request"].includes(value.intent)) {
     state.intent = value.intent;
   }
-
+  if (typeof value.customerParts === "boolean") {
+    state.customerParts = value.customerParts;
+  }
+  
+  state.additionalServicesReviewed =
+  value.additionalServicesReviewed === true;
   const serviceIds = new Set(company.services.map((service) => service.id));
   if (serviceIds.has(value.serviceId)) state.serviceId = value.serviceId;
   const selectedService = company.services.find((service) => service.id === state.serviceId);
@@ -99,9 +121,14 @@ export function normalizeIntakeState(value, company) {
   }
   state.requestedWork = cleanText(value.requestedWork);
 
-  for (const field of Object.keys(state.vehicle)) {
-    state.vehicle[field] = cleanText(value.vehicle?.[field], 100);
-  }
+  for (const field of ["brand", "model", "year", "engine", "mileage"]) {
+  state.vehicle[field] = cleanText(value.vehicle?.[field], 100);
+}
+
+state.vehicle.windshieldSensors =
+  typeof value.vehicle?.windshieldSensors === "boolean"
+    ? value.vehicle.windshieldSensors
+    : null;
   for (const field of Object.keys(state.problem)) {
     state.problem[field] = cleanText(value.problem?.[field], 500);
   }
@@ -116,6 +143,14 @@ export function normalizeIntakeState(value, company) {
   return state;
 }
 
+export function hasValidContact(customer) {
+  const email = String(customer?.email ?? "").trim();
+  const phone = String(customer?.phone ?? "").replace(/[\s().-]/g, "");
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    /^\+?\d{9,15}$/.test(phone);
+}
+
 export function missingIntakeFields(state) {
   if (state.intent !== "service_request") return [];
 
@@ -128,7 +163,7 @@ export function missingIntakeFields(state) {
   if (!state.vehicle.year) missing.push("vehicle.year");
   if (!state.preferredTime) missing.push("preferredTime");
   if (!state.customer.name) missing.push("customer.name");
-  if (!state.customer.phone && !state.customer.email) missing.push("customer.contact");
+  if (!hasValidContact(state.customer)) missing.push("customer.contact");
 
   return missing.filter((field) => !state.skipped.includes(field));
 }

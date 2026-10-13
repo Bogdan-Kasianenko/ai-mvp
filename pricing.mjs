@@ -1,266 +1,144 @@
-// Ключ: serviceId или serviceId:serviceOptionId из company.json.
-// Здесь нет второго списка названий услуг.
+// Service IDs match company.json. All amounts include DPH.
 export const pricingCatalog = {
-  "oil_filters:engine_oil": {
-    method: "hourly",
-    laborMinutes: { min: 30, typical: 40, max: 45 },
-    partsByClass: {
-      A: { from: 750, to: 1400 },   // масло + масляный фильтр
-      B: { from: 1150, to: 2300 },
-      C: { from: 1900, to: 4400 }
-    }
-  },
-  "brakes:brake_pads": {
-    method: "hourly",
-    laborMinutes: { min: 45, typical: 50, max: 60 },
-    partsByClass: {
-      A: { from: 600, to: 1200 },
-      B: { from: 1000, to: 2200 },
-      C: { from: 2000, to: 4500 }
-    }
-  },
-  "brakes:brake_discs": {
-    method: "hourly",
-    laborMinutes: null,
-    partsByClass: {
-      A: { from: 1200, to: 2500 },
-      B: { from: 2200, to: 4500 },
-      C: { from: 4500, to: null }
-    }
-  },
-  "brakes:brake_discs_pads": {
-    method: "hourly",
-    laborMinutes: { min: 90, typical: 105, max: 120 },
-    partsByClass: {
-      A: { from: 1800, to: 3700 },
-      B: { from: 3200, to: 6700 },
-      C: { from: 6500, to: null }
-    }
-  },
-  "brakes:brake_fluid": {
-  method: "hourly",
-  laborMinutes: { min: 30, typical: 60, max: 90 },
-  estimatedFluidLitersByClass: {
-    A: { from: 0.5, to: 1.0 },
-    B: { from: 0.7, to: 1.3 },
-    C: { from: 0.8, to: 1.5 }
-  },
-  estimatedFluidPricePerLiterKc: 400,
-  partsByClass: {
-    A: { from: 200, to: 400 },
-    B: { from: 280, to: 520 },
-    C: { from: 320, to: 600 }
-  }
+  diagnostics: { method: "fixed", priceKc: 700 },
+  "scheduled_maintenance:annual_service": { method: "labor", minutesFrom: 60 },
+  "oil_filters:engine_oil": { method: "labor", minutesFrom: 30, materials: "olej a olejový filtr" },
+  "oil_filters:air_filter": {
+  method: "labor",
+  minutesFrom: 20,
+  materials: "vzduchový filtr motoru"
 },
-  "air_conditioning:refrigerant": {
-  method: "refrigerant",
-  tariffsByType: {
-    R134a: { basePriceKc: 750, pricePerGramKc: 2.5 },
-    R1234yf: { basePriceKc: 1200, pricePerGramKc: 6 }
-  }
+"oil_filters:cabin_filter": {
+  method: "labor",
+  minutesFrom: 20,
+  materials: "kabinový (pylový) filtr"
 },
+  "brakes:brake_inspection": { method: "labor", minutesFrom: 30 },
+  "brakes:brake_pads": { method: "labor", minutesFrom: 45, materials: "brzdové destičky" },
+  "brakes:brake_discs": { method: "labor", minutesFrom: 60, materials: "brzdové kotouče" },
+  "brakes:brake_discs_pads": { method: "labor", minutesFrom: 90, materials: "brzdové kotouče a destičky" },
+  "brakes:brake_fluid": { method: "labor", minutesFrom: 30, materials: "brzdová kapalina" },
   "tires:seasonal_tires": {
-  method: "fixed",
-  fixedPricesKc: {
-    steel_13_16: 1450,
-    alu_13_14: 1450,
-    alu_15_18: 1600,
-    alu_19_22: 2000,
-    alu_23_24: 2300
-  }
-},
-"tires:wheel_swap": {
-  method: "fixed",
-  fixedPricesKc: {
-    steel_13_16: 1000,
-    alu_13_16: 1000,
-    alu_17_20: 1200,
-    alu_21_24: 1600
-  }
-},
-  timing_belt: {
-    method: "hourly",
-    laborMinutes: { min: 240, typical: 360, max: 480 },
-    partsByClass: {
-      A: { from: 2000, to: 4500 },
-      B: { from: 3500, to: 7000 },
-      C: { from: 6000, to: 14000 }
-    }
+    method: "fixed_variants",
+    variantsKc: { steel_13_16: 1450, alu_13_14: 1450, alu_15_18: 1600, alu_19_22: 2000, alu_23_24: 2300 },
+    variantLabels: { steel_13_16: "plech 13–16″", alu_13_14: "ALU 13–14″", alu_15_18: "ALU 15–18″", alu_19_22: "ALU 19–22″", alu_23_24: "ALU 23–24″" }
   },
-  clutch: {
-    method: "hourly",
-    laborMinutes: { min: 240, typical: 360, max: 480 },
-    partsByClass: {
-      A: { from: 3000, to: 6000 },
-      B: { from: 8000, to: 16000 },
-      C: { from: 15000, to: null }
-    }
+  "tires:wheel_swap": {
+    method: "fixed_variants",
+    variantsKc: { steel_13_16: 1000, alu_13_16: 1000, alu_17_20: 1200, alu_21_24: 1600 },
+    variantLabels: { steel_13_16: "plech 13–16″", alu_13_16: "ALU 13–16″", alu_17_20: "ALU 17–20″", alu_21_24: "ALU 21–24″" }
   },
+  "tires:tread_check": { method: "fixed", priceKc: 250 },
+  "chassis:chassis_inspection": { method: "labor", minutesFrom: 45 },
+  "air_conditioning:refrigerant": {
+    method: "service_fee_variants",
+    variantsKc: { R134a: 750, R1234yf: 1200 },
+    variantLabels: { R134a: "R134a", R1234yf: "R1234yf" },
+    materials: "skutečně doplněné chladivo"
+  },
+  "air_conditioning:ac_disinfection": { method: "labor", minutesFrom: 30, materials: "dezinfekční prostředek" },
+  "auto_glass:glass_crack": { method: "labor", minutesFrom: 45, materials: "materiál k opravě" },
+  "auto_glass:windshield": {
+    method: "labor",
+    minutesFrom: 90,
+    materials: "čelní sklo a případný další materiál podle vozu a výbavy"
+  },
+  "stk:stk_preparation": { method: "labor", minutesFrom: 45 },
+  "stk:stk_arrangement": {
+    method: "fixed_variants",
+    variantsKc: { inspection_only: 2450, inspection_and_emissions: 3450 },
+    variantLabels: { inspection_only: "bez emisí", inspection_and_emissions: "s emisemi" }
+  },
+  timing_service: {
+    method: "labor", minutesFrom: 240,
+    materials: "díly rozvodů podle konkrétního vozu"
+  },
+  clutch: { method: "labor", minutesFrom: 240, materials: "spojková sada" },
   wheel_alignment: {
-  method: "fixed",
-  fixedPriceKc: 1000, // цена «от» за переднюю ось
-  fixedPricesKc: {
-    front_axle: 1000,
-    both_axles: 1200
+    method: "fixed_variants",
+    variantsKc: { front_axle: 1000, both_axles: 1200 },
+    variantLabels: { front_axle: "přední náprava", both_axles: "obě nápravy" }
   }
-}
 };
 
-function validRange(value) {
-  return (
-    value &&
-    Number.isFinite(value.from) &&
-    value.from >= 0 &&
-    (value.to === null ||
-      (Number.isFinite(value.to) && value.to >= value.from))
-  );
-}
-
-export function calculateServiceEstimate(
+export function getPriceQuote(
   company,
   serviceId,
-  optionId,
-  vehicleClass,
-  hourlyRateKc = 850, 
-  details = {}
-) {   
-    details ??= {};
+  optionId = null,
+  hourlyRateKc = company.laborRates?.standardKcPerHour
+) {
   const service = company.services.find((item) => item.id === serviceId);
-  const operation = optionId
-    ? service?.options?.find((item) => item.id === optionId)
-    : service;
-
+  const operation = optionId ? service?.options?.find((item) => item.id === optionId) : service;
   if (!operation) return null;
-
   const key = optionId ? `${serviceId}:${optionId}` : serviceId;
-  const pricing = pricingCatalog[key];
-  if (!pricing) return null;
-  if (pricing.method === "refrigerant") {
-   const tariffs = pricing.tariffsByType;
-  const type = details.refrigerantType;
+  const rule = pricingCatalog[key];
+  if (!rule) return null;
 
-  if (typeof type !== "string" || !tariffs || !Object.hasOwn(tariffs, type)) {
-    return null;
-  }
-
-  const tariff = tariffs[type];
-  if (
-    !Number.isFinite(tariff?.basePriceKc) ||
-    tariff.basePriceKc < 0 ||
-    !Number.isFinite(tariff.pricePerGramKc) ||
-    tariff.pricePerGramKc < 0
-  ) {
-    return null;
-  }
-
-  const work = {
-    from: tariff.basePriceKc,
-    to: tariff.basePriceKc
-  };
-
-  const grams = details.gramsAdded;
-  if (!Number.isFinite(grams) || grams < 0) {
-    return { work, materials: null, total: null };
-  }
-
-  const refrigerantCost = Math.round(grams * tariff.pricePerGramKc);
-  const total = tariff.basePriceKc + refrigerantCost;
-
-    if (!Number.isFinite(refrigerantCost) || !Number.isFinite(total)) {
-    return { work, materials: null, total: null };
-  }
-
-  return {
-    work,
-    materials: { from: refrigerantCost, to: refrigerantCost },
-    total: { from: total, to: total }
-  };
-}
-
-  let work = null;
-
-  if (pricing.method === "fixed") {
-  const variants = pricing.fixedPricesKc;
-
-  if (variants) {
-    const prices = Object.values(variants).filter(
-      (price) => Number.isFinite(price) && price >= 0
-    );
-
-    if (details.variant !== undefined) {
-      if (!Object.hasOwn(variants, details.variant)) return null;
-      const price = variants[details.variant];
-      if (!Number.isFinite(price)) return null;
-      work = { from: price, to: price };
-    } else if (prices.length > 0) {
-      work = {
-        from: Math.min(...prices),
-        to: Math.max(...prices)
-      };
-    }
-  }
-
-  if (!work && Number.isFinite(pricing.fixedPriceKc)) {
-    work = {
-      from: pricing.fixedPriceKc,
-      to: pricing.fixedPriceKc
+  if (rule.method === "labor") {
+    const hourlyRate = company.laborRates?.standardKcPerHour;
+    const amount = hourlyRateKc * rule.minutesFrom / 60;
+    if (!Number.isFinite(amount) || amount < 0) return null;
+    return {
+      kind: "labor_only",
+      priceFromKc: Math.floor(amount / 100) * 100,
+      materials: rule.materials ?? null
     };
   }
 
-  } else if (
-    pricing.method === "hourly" &&
-    Number.isFinite(hourlyRateKc) &&
-    hourlyRateKc > 0 &&
-    Number.isFinite(pricing.laborMinutes?.min) &&
-    Number.isFinite(pricing.laborMinutes?.max)
-  ) {
-    work = {
-      from: Math.round(pricing.laborMinutes.min / 60 * hourlyRateKc),
-      to: Math.round(pricing.laborMinutes.max / 60 * hourlyRateKc)
+  if (rule.method === "fixed") return { kind: "fixed", priceKc: rule.priceKc };
+  if (rule.method === "fixed_variants" || rule.method === "service_fee_variants") {
+    return {
+      kind: rule.method,
+      variantsKc: rule.variantsKc,
+      variantLabels: rule.variantLabels ?? null,
+      materials: rule.materials ?? null
     };
   }
-
-  if (work && (!Number.isFinite(work.from) || !Number.isFinite(work.to))) {
-    work = null;
-  }
-
-  const candidate = pricing.partsByClass?.[vehicleClass];
-  const materials = operation.requiresParts
-    ? (validRange(candidate) ? candidate : null)
-    : { from: 0, to: 0 };
-
-    const total = work && materials
-    ? {
-        from: work.from + materials.from,
-        to: work.to === null || materials.to === null
-          ? null
-          : work.to + materials.to
-      }
-    : null;
-
-  return {
-    work,
-    materials,
-    total:
-      total &&
-      Number.isFinite(total.from) &&
-      (total.to === null || Number.isFinite(total.to))
-        ? total
-        : null
-  };
+  return null;
 }
 
-export function findUnknownPricingIds(company) {
-  const offeredIds = new Set(
+export function getPriceBook(
+  company,
+  hourlyRateKc = company.laborRates?.standardKcPerHour
+) {
+  return Object.fromEntries(
     company.services.flatMap((service) => [
-      service.id,
-      ...(service.options || []).map(
-        (option) => `${service.id}:${option.id}`
-      )
-    ])
+      [
+        service.id,
+        getPriceQuote(company, service.id, null, hourlyRateKc)
+      ],
+      ...(service.options ?? []).map((option) => [
+        `${service.id}:${option.id}`,
+        getPriceQuote(company, service.id, option.id, hourlyRateKc)
+      ])
+    ]).filter(([, quote]) => quote !== null)
   );
+}
 
-  return Object.keys(pricingCatalog).filter(
-    (id) => !offeredIds.has(id)
-  );
+export function withPublicPrices(company) {
+  function decorate(serviceId, optionId, item) {
+    const quote = getPriceQuote(company, serviceId, optionId);
+    if (!quote) return { ...item, priceLabel: null };
+    if (quote.kind === "labor_only") {
+      return { ...item, priceLabel: `práce od ${quote.priceFromKc.toLocaleString("cs-CZ")} Kč; materiál zvlášť` };
+    }
+    if (quote.kind === "fixed") return { ...item, priceLabel: `${quote.priceKc.toLocaleString("cs-CZ")} Kč` };
+    if (quote.kind === "fixed_variants") {
+      const label = Object.entries(quote.variantsKc).map(([key, amount]) =>
+        `${quote.variantLabels?.[key] ?? key}: ${amount.toLocaleString("cs-CZ")} Kč`
+      ).join("; ");
+      return { ...item, priceLabel: label };
+    }
+    const fees = Object.entries(quote.variantsKc).map(([key, amount]) =>
+      `${quote.variantLabels?.[key] ?? key}: ${amount.toLocaleString("cs-CZ")} Kč`
+    ).join("; ");
+    return { ...item, priceLabel: `servisní poplatek ${fees}; chladivo zvlášť` };
+  }
+  return {
+    ...company,
+    services: company.services.map((service) => ({
+      ...decorate(service.id, null, service),
+      options: (service.options ?? []).map((option) => decorate(service.id, option.id, option))
+    }))
+  };
 }

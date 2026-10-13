@@ -3,8 +3,11 @@
 ## Run locally
 
 Requires Node.js 22 or newer. Copy `.env.example` to `.env`, replace
-`your_api_key_here` with your OpenAI API key, and keep `.env` private.
-The key is read by the server and must never be added to frontend code.
+`your_api_key_here` with your OpenAI API key. Set `GMAIL_USER` to the sending
+Gmail address, `GMAIL_APP_PASSWORD` to a 16-character Google app password,
+and `LEADS_TO_EMAIL` to the service inbox. Keep `.env` private. Credentials
+are read by the server and must never be added to frontend code. After
+changing `.env`, restart the server.
 
 In PowerShell, use `npm.cmd` if script execution blocks `npm`:
 
@@ -27,21 +30,28 @@ Open http://127.0.0.1:3000. The server listens only on this computer.
   on the next visit (or while the page remains open). Messages over 20,000
   characters are visibly shortened before display and storage. The app does not
   store chat history on its server.
-- The browser also keeps a structured, unsent service-request draft with known
-  vehicle, problem, and customer details. The server validates this draft on each
-  chat request and returns updated fields and a list of missing required details.
-  Engine, mileage, and last oil-change date are optional. No lead is created.
-- `company.json` lists individual tasks within each service. Each task has its
-  own `priceFrom` field, currently null until a real starting price is confirmed;
-  the assistant must not invent an estimate or apply one task's price to another.
+- The browser keeps structured service-request details about the vehicle,
+  problem, and customer. The server validates them on each chat request.
+  Engine, mileage, and last oil-change date are optional. After the customer
+  explicitly confirms sending, the server emails the request to the service.
+  Emailing the request does not reserve a time slot.
+- `company.json` lists the services and the demo labor rates (850 Kč/hour,
+  or 1,000 Kč/hour for customer-supplied parts). `pricing.mjs` is the single
+  source for service prices. For most repairs it calculates a starting labor
+  price only; parts and fluids are separate and depend on the vehicle and
+  selected products. The timing-service price is for labor only;
+  any water-pump replacement is a separate job and price. Fixed
+  services and tire/STK variants keep their own prices. `GET /api/company`
+  adds public price labels from this catalog, and the AI receives the same
+  catalog. The assistant does not quote or calculate prices for parts.
 - A fresh conversation offers six suggested questions. If an answer arrives
   while the visitor is reading earlier messages, a button shows the unread count
   and scrolls to the newest reply.
 - The browser also remembers whether the chat is open and whether the desktop
   chat is expanded.
-- The page tells visitors that a phone number or email may be included in a
-  draft, and that chat messages are sent to OpenAI and stored in the browser.
-  It asks visitors not to include other sensitive details.
+- The page tells visitors that chat messages are sent to OpenAI, stored in the
+  browser, and that request details are emailed to the service only after
+  confirmation. It asks visitors not to include other sensitive details.
 - The browser shows a typing state and a message if the AI request fails.
 
 ## Manual checks

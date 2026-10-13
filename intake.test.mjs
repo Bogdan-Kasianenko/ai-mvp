@@ -43,6 +43,13 @@ test("unknown or declined details are not requested repeatedly", () => {
   ]);
 });
 
+test("customer parts preference survives structured intake normalization", () => {
+  const ownParts = normalizeIntakeState({ ...emptyIntakeState(), customerParts: true }, company);
+  const serviceParts = normalizeIntakeState({ ...ownParts, customerParts: false }, company);
+  assert.equal(ownParts.customerParts, true);
+  assert.equal(serviceParts.customerParts, false);
+});
+
 test("untrusted state cannot add unlisted services or arbitrary fields", () => {
   const state = normalizeIntakeState({
     intent: "service_request",

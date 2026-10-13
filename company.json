@@ -1,5 +1,43 @@
 {
-  "name": "Demo autoservis",
+  "name": "Caro Demo Servis",
+"demo": true,
+"contact": {
+  "city": "Zlín",
+  "region": "Zlínský kraj",
+  "address": "Ukázková 12, Zlín (fiktivní adresa pro demo)",
+  "phone": null,
+  "email": null
+},
+"openingHours": {
+  "mondayToFriday": "08:00–17:00",
+  "saturday": "09:00–12:00",
+  "sunday": "zavřeno"
+},
+"laborRates": {
+  "standardKcPerHour": 850,
+  "customerPartsKcPerHour": 1000
+},
+  "policies": {
+  "customerParts": {
+    "accepted": true,
+    "conditions": null
+  },
+  "insuranceRepairs": {
+    "available": true,
+    "types": ["povinné ručení", "havarijní pojištění"],
+    "directSettlementWithInsurer": null
+  },
+  "replacementVehicle": {
+    "available": true,
+    "priceKc": null,
+    "availability": null
+  },
+  "stk": {
+    "preparation": true,
+    "arrangement": true,
+    "availableDates": null
+  }
+},
   "services": [
     {
       "id": "diagnostics",
@@ -22,25 +60,34 @@
         }
       ]
     },
+      {
+  "id": "oil_filters",
+  "name": "Servis oleje a filtrů",
+  "priceFrom": null,
+  "options": [
     {
-      "id": "oil_filters",
-      "name": "Výměna oleje a filtrů",
+      "id": "engine_oil",
+      "name": "Výměna motorového oleje a olejového filtru",
+      "description": "Olej a olejový filtr se mění v rámci jednoho úkonu.",
       "priceFrom": null,
-      "options": [
-        {
-          "id": "engine_oil",
-          "name": "Výměna motorového oleje a olejového filtru",
-          "priceFrom": null,
-          "requiresParts": true
-        },
-        {
-          "id": "filters",
-          "name": "Výměna vzduchového nebo kabinového filtru",
-          "priceFrom": null,
-          "requiresParts": true
-        }
-      ]
+      "requiresParts": true
     },
+    {
+      "id": "air_filter",
+      "name": "Výměna vzduchového filtru motoru",
+      "description": "Samostatný úkon; filtr čistí vzduch přiváděný do motoru.",
+      "priceFrom": null,
+      "requiresParts": true
+    },
+    {
+      "id": "cabin_filter",
+      "name": "Výměna kabinového (pylového) filtru",
+      "description": "Samostatný úkon; filtr čistí vzduch přiváděný do kabiny.",
+      "priceFrom": null,
+      "requiresParts": true
+    }
+  ]
+},
     {
       "id": "brakes",
       "name": "Servis brzd",
@@ -86,13 +133,13 @@
         {
           "id": "seasonal_tires",
           "name": "Přezutí 4 pneumatik včetně vyvážení",
-          "priceFrom": 1450,
+          "priceFrom": null,
           "requiresParts": false
         },
         {
           "id": "wheel_swap",
           "name": "Výměna 4 kompletních kol včetně vyvážení",
-          "priceFrom": 1000,
+          "priceFrom": null,
           "requiresParts": false
         },
         {
@@ -155,8 +202,35 @@
       ]
     },
     {
-      "id": "timing_belt",
-      "name": "Výměna rozvodů a vodní pumpy",
+  "id": "insurance_repairs",
+  "name": "Opravy po pojistné události",
+  "description": "Posouzení a opravy po škodě řešené z povinného ručení nebo havarijního pojištění.",
+  "priceFrom": null,
+  "options": []
+},
+{
+  "id": "stk",
+  "name": "Příprava a zajištění STK",
+  "priceFrom": null,
+  "options": [
+    {
+      "id": "stk_preparation",
+      "name": "Příprava vozidla na STK",
+      "priceFrom": null,
+      "requiresParts": false
+    },
+    {
+      "id": "stk_arrangement",
+      "name": "Zajištění STK",
+      "priceFrom": null,
+      "requiresParts": false
+    }
+  ]
+},
+    {
+      "id": "timing_service",
+      "name": "Výměna rozvodů",
+      "description": "Cena od platí pouze za práci. Díly rozvodů podle vozu a případná výměna vodní pumpy se posuzují a naceňují zvlášť.",
       "priceFrom": null,
       "requiresParts": true,
       "options": []

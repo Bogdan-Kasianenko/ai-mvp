@@ -155,6 +155,10 @@ let intakeState = null;
 let lastReadMarker = null;
 let chatGeneration = 0;
 let historyExpiryTimer;
+let questionListOpen = false;
+let helpHintTimer;
+let helpHintDismissed = false;
+let helpHoverStartedAt = null;
 
 function limitMessageLength(content) {
   if (content.length <= MAX_MESSAGE_LENGTH) return content;
@@ -512,12 +516,6 @@ function resizeMessageInput() {
   input.style.height = `${Math.min(neededHeight, 72)}px`;
   input.style.overflowY = neededHeight > 72 ? "auto" : "hidden";
 }
-
-let questionListOpen = false;
-
-let helpHintTimer;
-let helpHintDismissed = false;
-let helpHoverStartedAt = null;
 
 function hideHelpHint() {
   clearTimeout(helpHintTimer);
@@ -1143,20 +1141,20 @@ async function loadCompany() {
 
     for (const service of company.services) {
       const item = document.createElement("li");
-      item.textContent = Number.isFinite(service.priceFrom)
-  ? `${service.name} — od ${service.priceFrom} Kč`
-  : Number.isFinite(service.price)
-    ? `${service.name} — ${service.price} Kč`
-    : service.name;
-      if (Array.isArray(service.options) && service.options.length > 0) {
+      item.textContent = service.priceLabel
+        ? `${service.name} — ${service.priceLabel}`
+        : service.name;
+
+      if (service.options?.length) {
         const details = document.createElement("small");
         details.textContent = service.options.map((option) =>
-          option.priceFrom === null
-            ? option.name
-            : `${option.name} — od ${option.priceFrom} Kč`
+          option.priceLabel
+            ? `${option.name} — ${option.priceLabel}`
+            : option.name
         ).join(" · ");
         item.append(document.createElement("br"), details);
       }
+
       services.append(item);
     }
   } catch {

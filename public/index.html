@@ -88,15 +88,22 @@
       <button id="question-list-toggle" class="chat-suggestions__toggle" type="button"
         aria-expanded="false" aria-controls="question-list">Vybrat otázku ze seznamu</button>
       <div id="question-list" class="chat-suggestions__list" hidden>
-        <p class="chat-suggestions__intro"><strong>Na cokoliv!</strong><span>Ale tady máte přehled nejpopulárnějších otázek.</span></p>
-        <button type="button" data-question="Jaké služby nabízíte?">Jaké služby nabízíte?</button>
-        <button type="button" data-question="Jak probíhá diagnostika auta?">Jak probíhá diagnostika auta?</button>
-        <button type="button" data-question="Kolik stojí diagnostika?">Kolik stojí diagnostika?</button>
-        <button type="button" data-question="Co dělat, když svítí kontrolka motoru?">Co dělat, když svítí kontrolka motoru?</button>
-        <button type="button" data-question="Co dělat, když auto nestartuje?">Co dělat, když auto nestartuje?</button>
-        <button type="button" data-question="Jak se připravit na diagnostiku?">Jak se připravit na diagnostiku?</button>
-      </div>
-    </div>
+  <p class="chat-suggestions__intro">
+    <strong>Na cokoliv!</strong>
+    <span>Vyzkoušejte časté dotazy a situace.</span>
+  </p> 
+   <div class="chat-suggestions__questions">
+    <button type="button" data-question="Mohu si přinést vlastní náhradní díly?">Mohu si přinést vlastní díly?</button>
+    <button type="button" data-question="Řešíte opravy z povinného ručení nebo havarijního pojištění?">Řešíte opravy přes pojišťovnu?</button>
+    <button type="button" data-question="Nabízíte náhradní vozidlo během opravy?">Nabízíte náhradní vozidlo?</button>
+    <button type="button" data-question="Zdá se mi, že s autem není něco v pořádku. Co by to mohlo být?">Něco není v pořádku s autem</button>
+    <button type="button" data-question="Rozsvítila se mi kontrolka motoru.">Rozsvítila se mi kontrolka motoru</button>
+    <button type="button" data-question="Děláte přípravu nebo zajištění STK?">Děláte přípravu a zajištění STK?</button>
+    <button type="button" data-question="Kdy se mají měnit rozvody a kolik to stojí?">Kdy měnit rozvody a kolik stojí?</button>
+    <button type="button" data-question="Chci se objednat na pravidelný servis: výměnu oleje a filtrů.">Chci se objednat na pravidelný servis</button>
+  </div>
+ </div>
+</div>
 
   <div id="chat-quick-actions" class="chat-quick-actions" hidden>
     <button id="chat-settings" class="chat-quick-actions__button" type="button"
@@ -123,7 +130,7 @@
 </form>
 
 </section>
-  <p class="note">Testovací verze. Při přípravě návrhu můžete uvést telefon nebo e-mail. Zprávy a údaje návrhu včetně kontaktu se posílají službě OpenAI pro vytvoření odpovědi a ukládají se v tomto prohlížeči; po 24 hodinách bez další zprávy se smažou. Demo žádost autoservisu neodesílá ani ji neukládá na svém serveru. Neuvádějte další citlivé údaje.</p>  </main>
+  <p class="note">Testovací verze. Komunikujete s AI asistentem. Zprávy a údaje žádosti včetně kontaktu se posílají službě OpenAI pro vytvoření odpovědi a ukládají se v tomto prohlížeči; po 24 hodinách bez další zprávy se smažou. Servisu žádost odešleme e-mailem až po Vašem výslovném potvrzení. Odeslání není rezervací termínu; termín potvrdí pracovník servisu. Neuvádějte další citlivé údaje.</p>  </main>
   <div id="chat-unread-status" class="sr-only" role="status" aria-atomic="true"></div>
 </body>
 </html>

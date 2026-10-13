@@ -1,9 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { getReply } from "./service.mjs";
+import { withPublicPrices } from "./pricing.mjs";
 import { normalizeIntakeState, missingIntakeFields } from "./intake.mjs";
 import express from "express";
 import { fileURLToPath } from "node:url";
 import { APIConnectionError, APIConnectionTimeoutError, InternalServerError } from "openai";
+import {
+  handleSendConfirmation,
+  presentRequestStep,
+  wasRequestSent
+} from "./request-flow.mjs";
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
@@ -26,7 +32,7 @@ app.get("/api/health", (request, response) => {
 
 app.get("/api/company", async (request, response) => {
   const company = await loadCompanyData();
-  response.json(company);
+  response.json(withPublicPrices(company));
 });
 
 app.post("/api/chat", async (request, response) => {
@@ -78,13 +84,13 @@ app.post("/api/chat", async (request, response) => {
     if (abortController.signal.aborted) return;
 
     const intake = normalizeIntakeState(request.body?.intake, company);
-
-    const result = await getReply(
+        const result = await getReply(
       message,
       company,
       cleanHistory,
       intake,
-      abortController.signal
+      abortController.signal,
+      wasRequestSent(intake)
     );
     if (abortController.signal.aborted) return;
 
@@ -95,18 +101,70 @@ app.post("/api/chat", async (request, response) => {
       });
     }
 
-    if (typeof result.text !== "string" || !result.text.trim()) {
+    if (result.kind !== "reply" || typeof result.text !== "string" || !result.text.trim()) {
       return response.status(502).json({
         error: "AI asistent nyní nemůže odpovědět. Zkuste to prosím později."
       });
     }
 
+    console.info("Submission decision:", {
+      action: result.submissionAction,
+      needsClarification: result.needsClarification,
+      intent: intake.intent,
+      additionalServicesReviewed: intake.additionalServicesReviewed
+    });
+
+        if (result.needsClarification === true) {
+      const nextIntake = normalizeIntakeState(result.intake, company);
+
+      return response.json({
+        reply: result.text,
+        intake: nextIntake,
+        missingFields: missingIntakeFields(nextIntake)
+      });
+    }
+
+    if (result.submissionAction === "ask_status") {
+      const sent = wasRequestSent(intake);
+      return response.json({
+        reply: sent
+          ? "Ano, žádost byla odeslána na e-mail servisu. Termín zatím není potvrzen; pracovník se Vám ozve."
+          : "Odeslání této žádosti nyní nemohu potvrdit. Termín zatím není rezervován.",
+        intake,
+        missingFields: missingIntakeFields(intake)
+      });
+    }
+
+    if (result.submissionAction === "confirm_send") {
+      const submission = await handleSendConfirmation({
+        history: cleanHistory,
+        intake,
+        company,
+        ip: request.ip
+      });
+
+      if (submission) {
+        return response.status(submission.status).json(submission.body);
+      }
+    }
+
     const nextIntake = normalizeIntakeState(result.intake, company);
+
+    if (result.submissionAction === "decline_send") {
+      nextIntake.intent = "service_discussion";
+      return response.json({
+        reply: result.text,
+        intake: nextIntake,
+        missingFields: []
+      });
+    }
+
     return response.json({
-      reply: result.text,
+      reply: presentRequestStep(result.text, nextIntake),
       intake: nextIntake,
       missingFields: missingIntakeFields(nextIntake)
     });
+    
   } catch (error) {
     if (abortController.signal.aborted) return;
     throw error;
