@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --env-file-if-exists=.env app.mjs"
+    "start": "node --env-file-if-exists=.env app.mjs",
+    "test": "node --test"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
   },
   "dependencies": {
     "express": "^5.1.0",

@@ -39,7 +39,7 @@ test("unknown or declined details are not requested repeatedly", () => {
 
   assert.deepEqual(state.skipped, ["vehicle.year", "customer.contact", "problem.lastOilChange"]);
   assert.deepEqual(missingIntakeFields(state), [
-    "vehicle.brand", "vehicle.model", "preferredTime", "customer.name"
+    "vehicle.brand", "vehicle.model", "preferredTime", "customer.name", "customer.contact"
   ]);
 });
 

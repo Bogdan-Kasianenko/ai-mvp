@@ -1,217 +1,128 @@
 import { readFile } from "node:fs/promises";
-import { getReply } from "./service.mjs";
 import { withPublicPrices } from "./pricing.mjs";
-import { normalizeIntakeState, missingIntakeFields } from "./intake.mjs";
 import express from "express";
 import { fileURLToPath } from "node:url";
-import { APIConnectionError, APIConnectionTimeoutError, InternalServerError } from "openai";
 import {
-  handleSendConfirmation,
-  presentRequestStep,
-  wasRequestSent
-} from "./request-flow.mjs";
+  APIConnectionError,
+  APIConnectionTimeoutError,
+  InternalServerError,
+} from "openai";
+import { createChatHandler, createSessionHandler } from "./chat-route.mjs";
+import { resolve } from "node:path";
+import { getChatSession } from './chat-session.mjs';
+import { messages } from './messages.mjs';
 
-const app = express();
-const port = Number(process.env.PORT || 3000);
-const listenHost = process.env.LISTEN_HOST || "127.0.0.1";
-const publicDirectory = fileURLToPath(new URL("./public/", import.meta.url));
+export function createApp({ chatOptions = {}, sessionOptions = {} } = {}) {
+  const app = express();
+  const sessionGetter = sessionOptions.getSession ?? chatOptions.getSession ?? getChatSession;
+  function requestMessages(request,response) {
+    let language=response.locals.language;
+    if(!language && request.headers.cookie) {
+      try { language=sessionGetter(request,response).language; } catch { /* Fall back when the session store itself is unavailable. */ }
+    }
+    return messages(language ?? 'cs');
+  }
+  const publicDirectory = fileURLToPath(new URL("./public/", import.meta.url));
 
-app.disable("x-powered-by");
-app.use(express.static(publicDirectory));
-app.use("/api", express.json({ limit: "64kb" }));
+  app.disable("x-powered-by");
+  app.use((request, response, next) => {
+    response.set("X-Content-Type-Options", "nosniff");
+    response.set("Referrer-Policy", "same-origin");
+    if (request.path.startsWith("/api"))
+      response.set("Cache-Control", "no-store");
+    if (
+      request.method === "POST" &&
+      request.headers.origin &&
+      request.headers.origin !== `${request.protocol}://${request.get("host")}`
+    ) {
+      return response
+        .status(403)
+        .json({ error: requestMessages(request,response).crossOrigin });
+    }
+    next();
+  });
+  app.use(express.static(publicDirectory));
+  app.use("/api", express.json({ limit: "64kb" }));
 
-async function loadCompanyData() {
-  const file = new URL("./company.json", import.meta.url);
-  const text = await readFile(file, "utf8");
-  return JSON.parse(text);
+  async function loadCompanyData() {
+    const file = new URL("./company.json", import.meta.url);
+    const text = await readFile(file, "utf8");
+    return JSON.parse(text);
+  }
+
+  app.get("/api/health", (request, response) => {
+    response.json({ status: "ok" });
+  });
+
+  app.get("/api/company", async (request, response) => {
+    const company = await loadCompanyData();
+    response.json(withPublicPrices(company));
+  });
+
+  app.post("/api/chat", createChatHandler({ loadCompanyData, ...chatOptions }));
+  app.get("/api/session", createSessionHandler(sessionOptions));
+  app.post(
+    "/api/session/reset",
+    createSessionHandler({ ...sessionOptions, reset: true }),
+  );
+
+  app.use((error, request, response, next) => {
+    const t=requestMessages(request,response);
+    if (error.type === "entity.parse.failed") {
+      return response.status(400).json({ error: t.invalidJson });
+    }
+    if (error.type === "entity.too.large") {
+      return response.status(413).json({ error: t.bodyTooLarge });
+    }
+    if (
+      error.type === "charset.unsupported" ||
+      error.type === "encoding.unsupported"
+    ) {
+      return response
+        .status(415)
+        .json({ error: t.unsupportedEncoding });
+    }
+    if (error.status === 400 && error.expose === true) {
+      return response.status(400).json({
+        error: t.invalidBody,
+      });
+    }
+    if (error instanceof APIConnectionTimeoutError) {
+      return response.status(503).json({
+        error: t.timeout,
+      });
+    }
+    if (
+      error.status === 429 ||
+      error instanceof APIConnectionError ||
+      error instanceof InternalServerError
+    ) {
+      console.error("AI request unavailable:", error.code || error.name);
+      return response.status(503).json({
+        error: t.unavailable,
+      });
+    }
+    console.error("Request failed:", error.code || error.name);
+    return response
+      .status(500)
+      .json({ error: t.requestFailed });
+  });
+  return app;
 }
 
-app.get("/api/health", (request, response) => {
-  response.json({ status: "ok" });
-});
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  const app = createApp();
+  const port = Number(process.env.PORT || 3000);
+  const listenHost = process.env.LISTEN_HOST || "127.0.0.1";
+  const server = app.listen(port, listenHost, () => {
+    console.log(`Open http://127.0.0.1:${port}`);
+  });
 
-app.get("/api/company", async (request, response) => {
-  const company = await loadCompanyData();
-  response.json(withPublicPrices(company));
-});
-
-app.post("/api/chat", async (request, response) => {
-  const message = request.body?.message;
-
-  if (
-    typeof message !== "string" ||
-    message.trim().length === 0 ||
-    message.length > 1000
-  ) {
-    return response.status(400).json({
-      error: "Zadejte zprávu o délce 1 až 1000 znaků."
-    });
-  }
-
-  const history = request.body?.history ?? [];
-
-  const validHistory =
-    Array.isArray(history) &&
-    history.length <= 12 &&
-    history.every(
-      (item) =>
-        item &&
-        (item.role === "user" || item.role === "assistant") &&
-        typeof item.content === "string" &&
-        item.content.trim().length > 0 &&
-        item.content.length <= 2000
-    ) &&
-    history.reduce((total, item) => total + item.content.length, 0) <= 12000;
-
-  if (!validHistory) {
-    return response.status(400).json({
-      error: "Neplatná historie chatu."
-    });
-  }
-
-  const cleanHistory = history.map(({ role, content }) => ({
-    role,
-    content: content.trim()
-  }));
-  const abortController = new AbortController();
-  const onResponseClose = () => {
-    if (!response.writableEnded) abortController.abort();
-  };
-  response.on("close", onResponseClose);
-
-  try {
-    const company = await loadCompanyData();
-    if (abortController.signal.aborted) return;
-
-    const intake = normalizeIntakeState(request.body?.intake, company);
-        const result = await getReply(
-      message,
-      company,
-      cleanHistory,
-      intake,
-      abortController.signal,
-      wasRequestSent(intake)
-    );
-    if (abortController.signal.aborted) return;
-
-    if (result.kind === "refusal") {
-      return response.json({
-        reply: "S tímto požadavkem Vám nemohu pomoci. Můžete se zeptat na něco jiného.",
-        refused: true
-      });
-    }
-
-    if (result.kind !== "reply" || typeof result.text !== "string" || !result.text.trim()) {
-      return response.status(502).json({
-        error: "AI asistent nyní nemůže odpovědět. Zkuste to prosím později."
-      });
-    }
-
-    console.info("Submission decision:", {
-      action: result.submissionAction,
-      needsClarification: result.needsClarification,
-      intent: intake.intent,
-      additionalServicesReviewed: intake.additionalServicesReviewed
-    });
-
-        if (result.needsClarification === true) {
-      const nextIntake = normalizeIntakeState(result.intake, company);
-
-      return response.json({
-        reply: result.text,
-        intake: nextIntake,
-        missingFields: missingIntakeFields(nextIntake)
-      });
-    }
-
-    if (result.submissionAction === "ask_status") {
-      const sent = wasRequestSent(intake);
-      return response.json({
-        reply: sent
-          ? "Ano, žádost byla odeslána na e-mail servisu. Termín zatím není potvrzen; pracovník se Vám ozve."
-          : "Odeslání této žádosti nyní nemohu potvrdit. Termín zatím není rezervován.",
-        intake,
-        missingFields: missingIntakeFields(intake)
-      });
-    }
-
-    if (result.submissionAction === "confirm_send") {
-      const submission = await handleSendConfirmation({
-        history: cleanHistory,
-        intake,
-        company,
-        ip: request.ip
-      });
-
-      if (submission) {
-        return response.status(submission.status).json(submission.body);
-      }
-    }
-
-    const nextIntake = normalizeIntakeState(result.intake, company);
-
-    if (result.submissionAction === "decline_send") {
-      nextIntake.intent = "service_discussion";
-      return response.json({
-        reply: result.text,
-        intake: nextIntake,
-        missingFields: []
-      });
-    }
-
-    return response.json({
-      reply: presentRequestStep(result.text, nextIntake),
-      intake: nextIntake,
-      missingFields: missingIntakeFields(nextIntake)
-    });
-    
-  } catch (error) {
-    if (abortController.signal.aborted) return;
-    throw error;
-  } finally {
-    response.off("close", onResponseClose);
-  }
-});
-
-app.use((error, request, response, next) => {
-  if (error.type === "entity.parse.failed") {
-    return response.status(400).json({ error: "Neplatný JSON." });
-  }
-  if (error.type === "entity.too.large") {
-    return response.status(413).json({ error: "Zpráva je příliš dlouhá." });
-  }
-  if (error.type === "charset.unsupported" || error.type === "encoding.unsupported") {
-    return response.status(415).json({ error: "Nepodporované kódování požadavku." });
-  }
-    if (error.status === 400 && error.expose === true) {
-    return response.status(400).json({
-      error: "Neplatné tělo požadavku."
-    });
-  }
-  if (error instanceof APIConnectionTimeoutError) {
-    return response.status(503).json({
-      error: "AI asistent neodpovídá. Zkuste to prosím znovu."
-    });
-  }
-  if (
-    error.status === 429 ||
-    error instanceof APIConnectionError ||
-    error instanceof InternalServerError
-  ) {
-    console.error("AI request unavailable:", error.message);
-    return response.status(503).json({
-      error: "AI asistent je dočasně nedostupný. Zkuste to prosím později."
-    });
-  }
-  console.error("Request failed:", error.message);
-  return response.status(500).json({ error: "Požadavek se nepodařilo zpracovat." });
-});
-
-const server = app.listen(port, listenHost, () => {
-  console.log(`Open http://127.0.0.1:${port}`);
-});
-
-server.on("error", (error) => {
-  console.error("Server could not start:", error.message);
-  process.exitCode = 1;
-});
+  server.on("error", (error) => {
+    console.error("Server could not start:", error.message);
+    process.exitCode = 1;
+  });
+}

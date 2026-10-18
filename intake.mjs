@@ -5,7 +5,7 @@ function objectSchema(properties) {
     type: "object",
     properties,
     required: Object.keys(properties),
-    additionalProperties: false
+    additionalProperties: false,
   };
 }
 
@@ -21,13 +21,21 @@ const skippedFields = [
   "problem.lastOilChange",
   "customer.name",
   "customer.contact",
-  "preferredTime"
+  "preferredTime",
 ];
 
 const intakeSchema = objectSchema({
-  intent: { type: "string", enum: ["general", "service_discussion", "service_request"] },
+  intent: {
+    type: "string",
+    enum: ["general", "service_discussion", "service_request"],
+  },
   customerParts: { type: ["boolean", "null"] },
+  oilFilterScopeReviewed: { type: "boolean" },
   additionalServicesReviewed: { type: "boolean" },
+    pendingDetails: {
+    type: "array",
+    items: { type: "string" },
+  },
   serviceId: nullableText,
   serviceOptionId: nullableText,
   requestedWork: nullableText,
@@ -36,61 +44,69 @@ const intakeSchema = objectSchema({
     model: nullableText,
     year: nullableText,
     engine: nullableText,
+    fuel: nullableText,
     mileage: nullableText,
-    windshieldSensors: { type: ["boolean", "null"] }
+    windshieldSensors: { type: ["boolean", "null"] },
   }),
   problem: objectSchema({
     description: nullableText,
     when: nullableText,
     warningLights: nullableText,
     otherSymptoms: nullableText,
-    lastOilChange: nullableText
+    lastOilChange: nullableText,
   }),
   customer: objectSchema({
     name: nullableText,
     phone: nullableText,
-    email: nullableText
+    email: nullableText,
   }),
   preferredTime: nullableText,
-  skipped: { type: "array", items: { type: "string", enum: skippedFields } }
+  skipped: { type: "array", items: { type: "string", enum: skippedFields } },
 });
 
 export const intakeResponseSchema = objectSchema({
   reply: { type: "string" },
+  language: { type: "string", enum: ["cs", "sk", "en", "ru", "uk", "de"] },
+  priceQuoted: { type: "boolean" },
+  keepClosedDay: { type: "boolean" },
   needsClarification: { type: "boolean" },
+  statusFollowUp: { type: "string" },
   intake: intakeSchema,
   submissionAction: {
-  type: "string",
-  enum: ["none", "confirm_send", "decline_send", "ask_status"]
-}
+    type: "string",
+    enum: ["none", "confirm_send", "decline_send", "ask_status"],
+  },
 });
 
 export function emptyIntakeState() {
   return {
     intent: "general",
     customerParts: null,
+    oilFilterScopeReviewed: false,
     additionalServicesReviewed: false,
+        pendingDetails: [],
     serviceId: null,
     serviceOptionId: null,
     requestedWork: null,
     vehicle: {
-  brand: null,
-  model: null,
-  year: null,
-  engine: null,
-  mileage: null,
-  windshieldSensors: null
-},
+      brand: null,
+      model: null,
+      year: null,
+      engine: null,
+      fuel: null,
+      mileage: null,
+      windshieldSensors: null,
+    },
     problem: {
       description: null,
       when: null,
       warningLights: null,
       otherSymptoms: null,
-      lastOilChange: null
+      lastOilChange: null,
     },
     customer: { name: null, phone: null, email: null },
     preferredTime: null,
-    skipped: []
+    skipped: [],
   };
 }
 
@@ -104,31 +120,48 @@ export function normalizeIntakeState(value, company) {
   const state = emptyIntakeState();
   if (!value || typeof value !== "object" || Array.isArray(value)) return state;
 
-  if (["general", "service_discussion", "service_request"].includes(value.intent)) {
+  if (
+    ["general", "service_discussion", "service_request"].includes(value.intent)
+  ) {
     state.intent = value.intent;
   }
   if (typeof value.customerParts === "boolean") {
     state.customerParts = value.customerParts;
   }
-  
-  state.additionalServicesReviewed =
-  value.additionalServicesReviewed === true;
+  state.oilFilterScopeReviewed = value.oilFilterScopeReviewed === true;
+
+  state.additionalServicesReviewed = value.additionalServicesReviewed === true;
+    state.pendingDetails = Array.isArray(value.pendingDetails)
+    ? [
+        ...new Set(
+          value.pendingDetails
+            .map((item) => cleanText(item, 150))
+            .filter(Boolean),
+        ),
+      ].slice(0, 20)
+    : [];
   const serviceIds = new Set(company.services.map((service) => service.id));
   if (serviceIds.has(value.serviceId)) state.serviceId = value.serviceId;
-  const selectedService = company.services.find((service) => service.id === state.serviceId);
-  if (selectedService?.options?.some((option) => option.id === value.serviceOptionId)) {
+  const selectedService = company.services.find(
+    (service) => service.id === state.serviceId,
+  );
+  if (
+    selectedService?.options?.some(
+      (option) => option.id === value.serviceOptionId,
+    )
+  ) {
     state.serviceOptionId = value.serviceOptionId;
   }
   state.requestedWork = cleanText(value.requestedWork);
 
-  for (const field of ["brand", "model", "year", "engine", "mileage"]) {
-  state.vehicle[field] = cleanText(value.vehicle?.[field], 100);
-}
+  for (const field of ["brand", "model", "year", "engine", "fuel", "mileage"]) {
+    state.vehicle[field] = cleanText(value.vehicle?.[field], 100);
+  }
 
-state.vehicle.windshieldSensors =
-  typeof value.vehicle?.windshieldSensors === "boolean"
-    ? value.vehicle.windshieldSensors
-    : null;
+  state.vehicle.windshieldSensors =
+    typeof value.vehicle?.windshieldSensors === "boolean"
+      ? value.vehicle.windshieldSensors
+      : null;
   for (const field of Object.keys(state.problem)) {
     state.problem[field] = cleanText(value.problem?.[field], 500);
   }
@@ -137,7 +170,11 @@ state.vehicle.windshieldSensors =
   }
   state.preferredTime = cleanText(value.preferredTime, 150);
   state.skipped = Array.isArray(value.skipped)
-    ? [...new Set(value.skipped.filter((field) => skippedFields.includes(field)))]
+    ? [
+        ...new Set(
+          value.skipped.filter((field) => skippedFields.includes(field)),
+        ),
+      ]
     : [];
 
   return state;
@@ -147,23 +184,102 @@ export function hasValidContact(customer) {
   const email = String(customer?.email ?? "").trim();
   const phone = String(customer?.phone ?? "").replace(/[\s().-]/g, "");
 
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-    /^\+?\d{9,15}$/.test(phone);
+  return (
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || /^\+?\d{9,15}$/.test(phone)
+  );
 }
 
-export function missingIntakeFields(state) {
+export function requiresParts(state, company) {
+  if (!company)
+    return (
+      state.serviceId === "oil_filters" ||
+      state.serviceId === "timing_service" ||
+      state.serviceId === "clutch"
+    );
+  const service = company.services.find((item) => item.id === state.serviceId);
+  const option = service?.options?.find(
+    (item) => item.id === state.serviceOptionId,
+  );
+  return (
+    option?.requiresParts === true ||
+    service?.requiresParts === true ||
+    (service?.options?.some((item) => item.requiresParts) && !option)
+  );
+}
+
+export function missingIntakeFields(state, company) {
   if (state.intent !== "service_request") return [];
 
   const missing = [];
-  if (!state.serviceOptionId && !state.requestedWork && !state.problem.description) {
+  if (
+    !state.serviceOptionId &&
+    !state.requestedWork &&
+    !state.problem.description
+  ) {
     missing.push("serviceOrProblem");
   }
   if (!state.vehicle.brand) missing.push("vehicle.brand");
   if (!state.vehicle.model) missing.push("vehicle.model");
-  if (!state.vehicle.year) missing.push("vehicle.year");
+  if (!state.vehicle.year && !state.skipped.includes("vehicle.year"))
+    missing.push("vehicle.year");
+
+    const needsOilEngine =
+    state.serviceId === "oil_filters" &&
+    state.customerParts === false &&
+    (
+      state.serviceOptionId === "engine_oil" ||
+      state.serviceOptionId === null
+    );
+
+  if (
+    needsOilEngine &&
+    !state.vehicle.engine &&
+    !state.skipped.includes("vehicle.engine")
+  ) {
+    missing.push("vehicle.engine");
+  }
+
   if (!state.preferredTime) missing.push("preferredTime");
   if (!state.customer.name) missing.push("customer.name");
   if (!hasValidContact(state.customer)) missing.push("customer.contact");
+  if (
+    state.serviceId === "oil_filters" &&
+    (state.serviceOptionId === "engine_oil" || state.serviceOptionId === null) &&
+    state.oilFilterScopeReviewed !== true
+  ) missing.push("oilFilterScopeReviewed");
 
-  return missing.filter((field) => !state.skipped.includes(field));
+  if (requiresParts(state, company) && state.customerParts === null)
+    missing.push("customerParts");
+  return missing;
+}
+
+function matchesSchema(value, schema) {
+  const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+  const type =
+    value === null ? "null" : Array.isArray(value) ? "array" : typeof value;
+  if (!types.includes(type) || (schema.enum && !schema.enum.includes(value)))
+    return false;
+  if (type === "string" && value.length > 20000) return false;
+  if (type === "array")
+    return (
+      value.length <= 30 &&
+      value.every((item) => matchesSchema(item, schema.items))
+    );
+  if (type === "object")
+    return (
+      Object.keys(value).every((key) =>
+        Object.hasOwn(schema.properties, key),
+      ) &&
+      schema.required.every(
+        (key) =>
+          Object.hasOwn(value, key) &&
+          matchesSchema(value[key], schema.properties[key]),
+      )
+    );
+  return true;
+}
+export function validateModelResponse(value) {
+  return (
+    matchesSchema(value, intakeResponseSchema) && Boolean(value.reply.trim())
+  );
 }

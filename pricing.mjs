@@ -13,20 +13,63 @@ export const pricingCatalog = {
   minutesFrom: 20,
   materials: "kabinový (pylový) filtr"
 },
+    "oil_filters:fuel_filter": {
+    method: "labor",
+    minutesFrom: 30,
+    materials: "palivový filtr"
+  },
+  "oil_filters:lpg_filter": {
+    method: "labor",
+    minutesFrom: 30,
+    materials: "jeden LPG filtr podle typu systému"
+  },
   "brakes:brake_inspection": { method: "labor", minutesFrom: 30 },
   "brakes:brake_pads": { method: "labor", minutesFrom: 45, materials: "brzdové destičky" },
   "brakes:brake_discs": { method: "labor", minutesFrom: 60, materials: "brzdové kotouče" },
   "brakes:brake_discs_pads": { method: "labor", minutesFrom: 90, materials: "brzdové kotouče a destičky" },
   "brakes:brake_fluid": { method: "labor", minutesFrom: 30, materials: "brzdová kapalina" },
-  "tires:seasonal_tires": {
+   "tires:seasonal_tires": {
     method: "fixed_variants",
-    variantsKc: { steel_13_16: 1450, alu_13_14: 1450, alu_15_18: 1600, alu_19_22: 2000, alu_23_24: 2300 },
-    variantLabels: { steel_13_16: "plech 13–16″", alu_13_14: "ALU 13–14″", alu_15_18: "ALU 15–18″", alu_19_22: "ALU 19–22″", alu_23_24: "ALU 23–24″" }
+    variantsKc: {
+      steel_13_16: 1450,
+      steel_17_18: 1600,
+      steel_19_22: 2000,
+      steel_23_24: 2300,
+      alu_13_14: 1450,
+      alu_15_18: 1600,
+      alu_19_22: 2000,
+      alu_23_24: 2300,
+    },
+    variantLabels: {
+      steel_13_16: "plech 13–16″",
+      steel_17_18: "plech 17–18″",
+      steel_19_22: "plech 19–22″",
+      steel_23_24: "plech 23–24″",
+      alu_13_14: "ALU 13–14″",
+      alu_15_18: "ALU 15–18″",
+      alu_19_22: "ALU 19–22″",
+      alu_23_24: "ALU 23–24″",
+    },
   },
+
   "tires:wheel_swap": {
     method: "fixed_variants",
-    variantsKc: { steel_13_16: 1000, alu_13_16: 1000, alu_17_20: 1200, alu_21_24: 1600 },
-    variantLabels: { steel_13_16: "plech 13–16″", alu_13_16: "ALU 13–16″", alu_17_20: "ALU 17–20″", alu_21_24: "ALU 21–24″" }
+    variantsKc: {
+      steel_13_16: 1000,
+      steel_17_20: 1200,
+      steel_21_24: 1600,
+      alu_13_16: 1000,
+      alu_17_20: 1200,
+      alu_21_24: 1600,
+    },
+    variantLabels: {
+      steel_13_16: "plech 13–16″",
+      steel_17_20: "plech 17–20″",
+      steel_21_24: "plech 21–24″",
+      alu_13_16: "ALU 13–16″",
+      alu_17_20: "ALU 17–20″",
+      alu_21_24: "ALU 21–24″",
+    },
   },
   "tires:tread_check": { method: "fixed", priceKc: 250 },
   "chassis:chassis_inspection": { method: "labor", minutesFrom: 45 },
@@ -75,13 +118,39 @@ export function getPriceQuote(
   if (!rule) return null;
 
   if (rule.method === "labor") {
-    const hourlyRate = company.laborRates?.standardKcPerHour;
     const amount = hourlyRateKc * rule.minutesFrom / 60;
     if (!Number.isFinite(amount) || amount < 0) return null;
     return {
       kind: "labor_only",
       priceFromKc: Math.floor(amount / 100) * 100,
       materials: rule.materials ?? null
+    };
+  }
+
+  if (
+    serviceId === "tires" &&
+    ["seasonal_tires", "wheel_swap"].includes(optionId) &&
+    rule.method === "fixed_variants"
+  ) {
+    const pricesByQuantityKc = Object.fromEntries(
+      [1, 2, 3, 4].map((quantity) => [
+        quantity,
+        Object.fromEntries(
+          Object.entries(rule.variantsKc).map(([variant, priceForFour]) => [
+            variant,
+            (priceForFour / 4) * quantity,
+          ]),
+        ),
+      ]),
+    );
+
+    return {
+      kind: "fixed_variants",
+      variantsKc: rule.variantsKc,
+      variantLabels: rule.variantLabels ?? null,
+      baseQuantity: 4,
+      pricesByQuantityKc,
+      materials: rule.materials ?? null,
     };
   }
 

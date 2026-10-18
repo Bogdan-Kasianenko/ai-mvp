@@ -1582,3 +1582,55 @@ line-height: 1;
 #chat-panel .chat-suggestions__questions button:focus-visible {
   box-shadow: none;
 }
+
+/* Keep the title still; let only the questions scroll into a soft lower edge. */
+#chat-panel .chat-suggestions__questions {
+  overflow-x: hidden;
+  padding-bottom: 26px;
+  scroll-padding-block: 10px 28px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 32px), transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 32px), transparent 100%);
+}
+
+#chat-panel .chat-suggestions__questions button:focus-visible {
+  outline: 2px solid #007d74;
+  outline-offset: -3px;
+}
+
+@media (max-width: 520px) {
+  #chat-panel .chat-quick-actions .chat-suggestions__list {
+    width: min(330px, calc(100vw - 32px));
+    max-height: min(55dvh, 390px);
+  }
+}
+#chat-panel .chat-price-table {
+  max-width: 100%;
+  margin: 10px 0;
+  overflow-x: auto;
+  white-space: normal;
+}
+
+#chat-panel .chat-price-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font: inherit;
+  font-size: 0.9em;
+  line-height: 1.4;
+}
+
+#chat-panel .chat-price-table th,
+#chat-panel .chat-price-table td {
+  padding: 8px 10px;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid rgba(54, 69, 79, 0.18);
+}
+
+#chat-panel .chat-price-table th {
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+#chat-panel .chat-price-table td:not(:first-child) {
+  white-space: nowrap;
+}

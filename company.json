@@ -38,7 +38,21 @@
     "availableDates": null
   }
 },
+  "towing": {
+    "contactName": "Jaromír Bohuslav",
+    "phone": "+420 xxx xxx xxx",
+    "openingHours": null,
+    "serviceArea": null
+  },
   "services": [
+        {
+      "id": "towing",
+      "name": "Odtahová služba",
+      "description": "Předání kontaktu na odtahovou službu. Dostupnost, cenu a provedení odtahu potvrzuje její pracovník.",
+      "priceFrom": null,
+      "requiresParts": false,
+      "options": []
+    },
     {
       "id": "diagnostics",
       "name": "Diagnostika vozidla",
@@ -79,10 +93,24 @@
       "priceFrom": null,
       "requiresParts": true
     },
-    {
+        {
       "id": "cabin_filter",
       "name": "Výměna kabinového (pylového) filtru",
       "description": "Samostatný úkon; filtr čistí vzduch přiváděný do kabiny.",
+      "priceFrom": null,
+      "requiresParts": true
+    },
+    {
+      "id": "fuel_filter",
+      "name": "Výměna palivového filtru",
+      "description": "Samostatná výměna palivového filtru benzínového nebo naftového systému. Nezahrnuje LPG filtr. Pouze na výslovnou žádost zákazníka.",
+      "priceFrom": null,
+      "requiresParts": true
+    },
+    {
+      "id": "lpg_filter",
+      "name": "Výměna LPG filtru",
+      "description": "Samostatná výměna jednoho LPG filtru kapalné nebo plynné fáze podle systému vozidla. Cena práce platí za jeden filtr. Pouze na výslovnou žádost zákazníka; nejde o revizi LPG.",
       "priceFrom": null,
       "requiresParts": true
     }

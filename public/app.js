@@ -14,7 +14,9 @@ const unreadBadge = document.querySelector("#chat-unread");
 const unreadStatus = document.querySelector("#chat-unread-status");
 const newMessagesButton = document.querySelector("#chat-new-messages");
 const newMessagesText = document.querySelector("#chat-new-messages-text");
-const newMessagesDots = newMessagesButton.querySelector(".chat-new-messages__dots");
+const newMessagesDots = newMessagesButton.querySelector(
+  ".chat-new-messages__dots",
+);
 const chatSuggestions = document.querySelector("#chat-suggestions");
 const questionListToggle = document.querySelector("#question-list-toggle");
 const questionList = document.querySelector("#question-list");
@@ -98,20 +100,22 @@ function updateLauncherStatus() {
   unreadBadge.hidden = unreadCount === 0;
   unreadBadge.textContent = String(unreadCount);
 
-  const unreadLabel = unreadCount === 1
-    ? "1 nepřečtená zpráva"
-    : unreadCount < 5
-      ? `${unreadCount} nepřečtené zprávy`
-      : `${unreadCount} nepřečtených zpráv`;
+  const unreadLabel =
+    unreadCount === 1
+      ? "1 nepřečtená zpráva"
+      : unreadCount < 5
+        ? `${unreadCount} nepřečtené zprávy`
+        : `${unreadCount} nepřečtených zpráv`;
   const buttonLabel = chatOpenText.textContent.trim();
   chatOpen.setAttribute(
     "aria-label",
-    unreadCount > 0 ? `${buttonLabel}. ${unreadLabel}` : buttonLabel
+    unreadCount > 0 ? `${buttonLabel}. ${unreadLabel}` : buttonLabel,
   );
 
-  const announcement = unreadCount > 0 && (chatPanel.hidden || !isNearMessagesBottom())
-    ? `AI asistent: ${unreadLabel}.`
-    : "";
+  const announcement =
+    unreadCount > 0 && (chatPanel.hidden || !isNearMessagesBottom())
+      ? `AI asistent: ${unreadLabel}.`
+      : "";
   if (unreadStatus.textContent !== announcement) {
     unreadStatus.textContent = announcement;
   }
@@ -119,22 +123,26 @@ function updateLauncherStatus() {
 }
 
 function isNearMessagesBottom() {
-  return messages.scrollHeight - messages.scrollTop - messages.clientHeight < 96;
+  return (
+    messages.scrollHeight - messages.scrollTop - messages.clientHeight < 96
+  );
 }
 
 function updateInChatNotice() {
-  const showNotice = chatUiState.open && !chatPanel.hidden && !isNearMessagesBottom();
+  const showNotice =
+    chatUiState.open && !chatPanel.hidden && !isNearMessagesBottom();
   const showUnread = showNotice && unreadCount > 0;
   const showTyping = showNotice && !showUnread && isAiTyping;
 
   newMessagesButton.hidden = !showUnread && !showTyping;
   newMessagesDots.hidden = !showTyping;
   if (showUnread) {
-    newMessagesText.textContent = unreadCount === 1
-      ? "1 nepřečtená zpráva"
-      : unreadCount < 5
-        ? `${unreadCount} nepřečtené zprávy`
-        : `${unreadCount} nepřečtených zpráv`;
+    newMessagesText.textContent =
+      unreadCount === 1
+        ? "1 nepřečtená zpráva"
+        : unreadCount < 5
+          ? `${unreadCount} nepřečtené zprávy`
+          : `${unreadCount} nepřečtených zpráv`;
   } else if (showTyping) {
     newMessagesText.textContent = "AI asistent píše…";
   }
@@ -152,6 +160,30 @@ const MAX_MESSAGE_LENGTH = 20000;
 const TRUNCATION_NOTICE = "\n\n[Zpráva byla zkrácena.]";
 let chatHistory = [];
 let intakeState = null;
+let confirmationToken = null;
+let conversationId = null;
+let sessionRevision = null;
+let sessionSync = null;
+let resetRequired = false;
+let sessionInitialized = false;
+let welcomeTask = null;
+let uiMessages = {
+  invalidMessage: 'Zadejte zprávu o délce 1 až 1000 znaků.',
+  timeout: 'Odpověď trvá příliš dlouho. Zkuste to prosím znovu.',
+  requestFailed: 'Požadavek se nepodařilo zpracovat. Zkuste to prosím znovu.',
+  connectionFailed: 'Nepodařilo se připojit k serveru. Zkuste to prosím později.',
+  unreadableReply: 'Odpověď se nepodařilo načíst. Zkuste to prosím znovu.',
+  restoreFailed: 'Nepodařilo se obnovit rozhovor. Zkuste to znovu.',
+  interrupted: 'Odpověď byla přerušena obnovením stránky. Odešlete zprávu prosím znovu.',
+  unavailable: 'AI asistent nyní nemůže odpovědět. Zkuste to prosím později.',
+};
+function receiveClientMessages(data) {
+  for(const key of Object.keys(uiMessages)) {
+    if(typeof data?.clientMessages?.[key] === 'string') uiMessages[key]=data.clientMessages[key];
+  }
+  try { sessionStorage.setItem('caro-ui-messages',JSON.stringify(uiMessages)); } catch {}
+}
+try { receiveClientMessages({clientMessages:JSON.parse(sessionStorage.getItem('caro-ui-messages') || 'null')}); } catch {}
 let lastReadMarker = null;
 let chatGeneration = 0;
 let historyExpiryTimer;
@@ -165,18 +197,20 @@ function limitMessageLength(content) {
 
   let end = MAX_MESSAGE_LENGTH - TRUNCATION_NOTICE.length;
   const lastCode = content.charCodeAt(end - 1);
-  if (lastCode >= 0xD800 && lastCode <= 0xDBFF) end--;
+  if (lastCode >= 0xd800 && lastCode <= 0xdbff) end--;
   return content.slice(0, end) + TRUNCATION_NOTICE;
 }
 
 function isValidHistoryEntry(entry) {
-  return entry &&
+  return (
+    entry &&
     typeof entry.id === "string" &&
     ["user", "assistant", "error", "welcome"].includes(entry.role) &&
     typeof entry.content === "string" &&
     entry.content.trim().length > 0 &&
     typeof entry.at === "string" &&
-    !Number.isNaN(Date.parse(entry.at));
+    !Number.isNaN(Date.parse(entry.at))
+  );
 }
 
 function normalizeHistoryEntry(entry) {
@@ -185,7 +219,7 @@ function normalizeHistoryEntry(entry) {
         id: entry.id,
         role: entry.role,
         content: limitMessageLength(entry.content),
-        at: entry.at
+        at: entry.at,
       }
     : null;
 }
@@ -196,7 +230,9 @@ function compareHistoryEntries(a, b) {
 
 function readStoredLastReadMarker() {
   try {
-    const marker = JSON.parse(localStorage.getItem(CHAT_LAST_READ_KEY) || "null");
+    const marker = JSON.parse(
+      localStorage.getItem(CHAT_LAST_READ_KEY) || "null",
+    );
     return marker &&
       typeof marker.id === "string" &&
       typeof marker.at === "string" &&
@@ -212,7 +248,7 @@ function updateUnreadCount() {
   unreadCount = chatHistory.filter(
     (entry) =>
       ["assistant", "error", "welcome"].includes(entry.role) &&
-      (!lastReadMarker || compareHistoryEntries(entry, lastReadMarker) > 0)
+      (!lastReadMarker || compareHistoryEntries(entry, lastReadMarker) > 0),
   ).length;
   updateLauncherStatus();
 }
@@ -220,17 +256,26 @@ function updateUnreadCount() {
 function markMessagesRead() {
   const storedMarker = readStoredLastReadMarker();
   let newest = lastReadMarker;
-  if (storedMarker && (!newest || compareHistoryEntries(storedMarker, newest) > 0)) {
+  if (
+    storedMarker &&
+    (!newest || compareHistoryEntries(storedMarker, newest) > 0)
+  ) {
     newest = storedMarker;
   }
 
   const latestMessage = chatHistory.at(-1);
-  if (latestMessage && (!newest || compareHistoryEntries(latestMessage, newest) > 0)) {
+  if (
+    latestMessage &&
+    (!newest || compareHistoryEntries(latestMessage, newest) > 0)
+  ) {
     newest = { id: latestMessage.id, at: latestMessage.at };
   }
 
   lastReadMarker = newest;
-  if (newest && (!storedMarker || compareHistoryEntries(newest, storedMarker) > 0)) {
+  if (
+    newest &&
+    (!storedMarker || compareHistoryEntries(newest, storedMarker) > 0)
+  ) {
     try {
       localStorage.setItem(CHAT_LAST_READ_KEY, JSON.stringify(newest));
     } catch {
@@ -242,9 +287,12 @@ function markMessagesRead() {
 
 function syncUnreadCount() {
   if (
-    chatUiState.open && !chatPanel.hidden &&
-    document.visibilityState === "visible" && isNearMessagesBottom()
-  ) markMessagesRead();
+    chatUiState.open &&
+    !chatPanel.hidden &&
+    document.visibilityState === "visible" &&
+    isNearMessagesBottom()
+  )
+    markMessagesRead();
   else updateUnreadCount();
 }
 
@@ -252,10 +300,15 @@ function readStoredHistory() {
   const entries = new Map();
 
   try {
-    const oldHistory = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "null");
+    const oldHistory = JSON.parse(
+      localStorage.getItem(CHAT_HISTORY_KEY) || "null",
+    );
     if (Array.isArray(oldHistory)) {
       oldHistory.forEach((entry, index) => {
-        const migrated = normalizeHistoryEntry({ ...entry, id: `legacy-${index}-${entry?.at}` });
+        const migrated = normalizeHistoryEntry({
+          ...entry,
+          id: `legacy-${index}-${entry?.at}`,
+        });
         if (migrated) entries.set(migrated.id, migrated);
       });
     }
@@ -269,7 +322,9 @@ function readStoredHistory() {
       if (!key?.startsWith(CHAT_MESSAGE_PREFIX)) continue;
 
       try {
-        const entry = normalizeHistoryEntry(JSON.parse(localStorage.getItem(key)));
+        const entry = normalizeHistoryEntry(
+          JSON.parse(localStorage.getItem(key)),
+        );
         if (entry && key === CHAT_MESSAGE_PREFIX + entry.id) {
           entries.set(entry.id, entry);
         }
@@ -281,18 +336,28 @@ function readStoredHistory() {
     // Если хранилище недоступно, остаётся история текущей вкладки.
   }
 
-  return [...entries.values()].sort(compareHistoryEntries).slice(-MAX_SAVED_MESSAGES);
+  return [...entries.values()]
+    .sort(compareHistoryEntries)
+    .slice(-MAX_SAVED_MESSAGES);
 }
 
 function migrateOldHistory() {
   try {
-    const oldHistory = JSON.parse(localStorage.getItem(CHAT_HISTORY_KEY) || "null");
+    const oldHistory = JSON.parse(
+      localStorage.getItem(CHAT_HISTORY_KEY) || "null",
+    );
     if (!Array.isArray(oldHistory)) return;
 
     oldHistory.forEach((entry, index) => {
-      const migrated = normalizeHistoryEntry({ ...entry, id: `legacy-${index}-${entry?.at}` });
+      const migrated = normalizeHistoryEntry({
+        ...entry,
+        id: `legacy-${index}-${entry?.at}`,
+      });
       if (!migrated) return;
-      localStorage.setItem(CHAT_MESSAGE_PREFIX + migrated.id, JSON.stringify(migrated));
+      localStorage.setItem(
+        CHAT_MESSAGE_PREFIX + migrated.id,
+        JSON.stringify(migrated),
+      );
     });
     localStorage.removeItem(CHAT_HISTORY_KEY);
   } catch {
@@ -309,7 +374,9 @@ function pruneStoredHistory() {
     }
 
     if (keys.length <= MAX_SAVED_MESSAGES) return;
-    const newest = new Set(readStoredHistory().map((entry) => CHAT_MESSAGE_PREFIX + entry.id));
+    const newest = new Set(
+      readStoredHistory().map((entry) => CHAT_MESSAGE_PREFIX + entry.id),
+    );
     for (const key of keys) {
       if (!newest.has(key)) localStorage.removeItem(key);
     }
@@ -318,16 +385,20 @@ function pruneStoredHistory() {
   }
 }
 
-function resetChatLocally() {
+function resetChatLocally({ resetServer = true } = {}) {
+  confirmationToken = null;
+  conversationId = null;
+  resetRequired = resetServer;
+  sessionInitialized = false;
   chatGeneration++;
   clearTimeout(historyExpiryTimer);
   chatHistory = [];
   intakeState = null;
   lastReadMarker = null;
   isFirstVisit = true;
-chatPrompt.classList.add("is-first-visit");
-chatHint.hidden = false;
-chatOpenText.textContent = "Zeptat se asistenta";
+  chatPrompt.classList.add("is-first-visit");
+  chatHint.hidden = false;
+  chatOpenText.textContent = "Zeptat se asistenta";
   messages.replaceChildren();
   isAiTyping = false;
   sendButton.disabled = false;
@@ -340,6 +411,7 @@ chatOpenText.textContent = "Zeptat se asistenta";
   }
   updateUnreadCount();
   updateSuggestions();
+  void syncServerSession().catch(() => {});
 }
 
 function scheduleHistoryExpiry() {
@@ -349,14 +421,16 @@ function scheduleHistoryExpiry() {
   const remaining = Date.parse(latest.at) + CHAT_HISTORY_LIFETIME - Date.now();
   historyExpiryTimer = setTimeout(
     () => expireChatHistoryIfNeeded(),
-    Math.min(2_147_483_647, Math.max(0, remaining + 50))
+    Math.min(2_147_483_647, Math.max(0, remaining + 50)),
   );
 }
 
 function expireChatHistoryIfNeeded(showWelcome = true) {
   const stored = readStoredHistory();
   const latest = [stored.at(-1), chatHistory.at(-1)]
-    .filter(Boolean).sort(compareHistoryEntries).at(-1);
+    .filter(Boolean)
+    .sort(compareHistoryEntries)
+    .at(-1);
   if (!latest || Date.now() - Date.parse(latest.at) < CHAT_HISTORY_LIFETIME) {
     scheduleHistoryExpiry();
     return false;
@@ -379,16 +453,24 @@ function expireChatHistoryIfNeeded(showWelcome = true) {
   }
 
   resetChatLocally();
-  if (showWelcome && chatUiState.open && !chatPanel.hidden) showWelcomeMessage();
+  if (showWelcome && chatUiState.open && !chatPanel.hidden)
+    showWelcomeMessage();
   return true;
 }
 
 function makeMessageId() {
-  return globalThis.crypto?.randomUUID?.() ||
-    `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return (
+    globalThis.crypto?.randomUUID?.() ||
+    `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
 }
 
-function rememberMessage(role, content, at = new Date().toISOString(), id = makeMessageId()) {
+function rememberMessage(
+  role,
+  content,
+  at = new Date().toISOString(),
+  id = makeMessageId(),
+) {
   const entry = { id, role, content: limitMessageLength(content), at };
   if (chatHistory.some((message) => message.id === id)) return entry;
 
@@ -410,10 +492,13 @@ function rememberMessage(role, content, at = new Date().toISOString(), id = make
 }
 
 function refreshChatHistory() {
+  if (isAiTyping) return;
   if (expireChatHistoryIfNeeded()) return;
   const wasNearBottom = isNearMessagesBottom();
   const knownIds = new Set(chatHistory.map((entry) => entry.id));
-  const newEntries = readStoredHistory().filter((entry) => !knownIds.has(entry.id));
+  const newEntries = readStoredHistory().filter(
+    (entry) => !knownIds.has(entry.id),
+  );
 
   for (const entry of newEntries) {
     const author = entry.role === "user" ? "Vy" : "AI asistent";
@@ -424,7 +509,12 @@ function refreshChatHistory() {
   chatHistory.push(...newEntries);
   chatHistory.sort(compareHistoryEntries);
   chatHistory = chatHistory.slice(-MAX_SAVED_MESSAGES);
-  if (newEntries.length && wasNearBottom && chatUiState.open && !chatPanel.hidden) {
+  if (
+    newEntries.length &&
+    wasNearBottom &&
+    chatUiState.open &&
+    !chatPanel.hidden
+  ) {
     requestAnimationFrame(scrollMessagesToBottom);
   }
   syncUnreadCount();
@@ -450,12 +540,16 @@ updateUnreadCount();
 try {
   const pendingId = sessionStorage.getItem(PENDING_CHAT_MESSAGE_KEY);
   if (pendingId) {
-    if (chatHistory.some((entry) => entry.id === pendingId && entry.role === "user")) {
+    if (
+      chatHistory.some(
+        (entry) => entry.id === pendingId && entry.role === "user",
+      )
+    ) {
       rememberMessage(
         "error",
-        "Odpověď byla přerušena obnovením stránky. Odešlete zprávu prosím znovu.",
+        uiMessages.interrupted,
         new Date().toISOString(),
-        `interrupted-${pendingId}`
+        `interrupted-${pendingId}`,
       );
     }
     sessionStorage.removeItem(PENDING_CHAT_MESSAGE_KEY);
@@ -466,7 +560,7 @@ try {
 
 window.addEventListener("storage", (event) => {
   if (event.key === CHAT_RESET_KEY) {
-    resetChatLocally();
+    resetChatLocally({ resetServer: false });
     if (chatUiState.open && !chatPanel.hidden) showWelcomeMessage();
     return;
   }
@@ -475,7 +569,10 @@ window.addEventListener("storage", (event) => {
   }
   if (event.key === CHAT_LAST_READ_KEY) {
     const marker = readStoredLastReadMarker();
-    if (marker && (!lastReadMarker || compareHistoryEntries(marker, lastReadMarker) > 0)) {
+    if (
+      marker &&
+      (!lastReadMarker || compareHistoryEntries(marker, lastReadMarker) > 0)
+    ) {
       lastReadMarker = marker;
       syncUnreadCount();
     }
@@ -489,25 +586,140 @@ window.addEventListener("storage", (event) => {
   }
 });
 
-function getRecentContext() {
-  expireChatHistoryIfNeeded(false);
-  refreshChatHistory();
-  const context = [];
-  let totalLength = 0;
+async function syncServerSession() {
+  if (sessionSync) return sessionSync;
+  sessionSync = (async () => {
+    const reset = resetRequired;
+    let response;
+    try { response = await fetch(
+      reset ? "/api/session/reset" : "/api/session",
+      {
+        method: reset ? "POST" : "GET",
+        signal: AbortSignal.timeout(10000),
+      },
+    ); } catch { throw new Error(uiMessages.connectionFailed); }
+    let data;
+    try { data = await response.json(); } catch { throw new Error(uiMessages.unreadableReply); }
+    receiveClientMessages(data);
+    if (!response.ok)
+      throw new Error(
+        data.error || uiMessages.restoreFailed,
+      );
+    if (reset) resetRequired = false;
+        if (
+      !sessionInitialized ||
+      conversationId !== data.conversationId ||
+      sessionRevision !== data.revision ||
+      confirmationToken !== (data.confirmationToken ?? null)
+    ) {
+      // Restore the server-owned conversation; local history is display-only.
+      chatHistory = [];
+      messages.replaceChildren();
+      try {
+        const keys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key?.startsWith(CHAT_MESSAGE_PREFIX)) keys.push(key);
+        }
+        for (const key of keys) localStorage.removeItem(key);
+      } catch {}
+            // Восстанавливаем приветствие перед существующей перепиской.
+      if (data.history.length > 0) {
+        const welcomeText =
+          "Dobrý den! 👋 S čím vám mohu pomoci? Napište mi, co se děje s vaším autem, nebo se zeptejte na služby, ceny či možnosti online objednání do servisu.";
 
-  for (let i = chatHistory.length - 1; i >= 0 && context.length < 12; i--) {
-    const entry = chatHistory[i];
-    if (entry.role !== "user" && entry.role !== "assistant") continue;
+        const firstTime = Date.parse(data.history[0].at);
+        const welcomeAt = new Date(
+          Number.isFinite(firstTime) ? firstTime - 1 : Date.now() - 1,
+        ).toISOString();
 
-    const content = entry.content.slice(0, 2000);
-    if (totalLength + content.length > 12000) break;
+        const welcomeEntry = rememberMessage(
+          "welcome",
+          welcomeText,
+          welcomeAt,
+          "welcome",
+        );
 
-    context.unshift({ role: entry.role, content });
-    totalLength += content.length;
+        const welcomeRow = showMessage(
+          "AI asistent",
+          welcomeText,
+          welcomeAt,
+          true,
+        );
+
+        placeHistoryRow(welcomeRow, welcomeEntry);
+      }
+      for (const entry of data.history) {
+        if (!["user", "assistant"].includes(entry.role)) continue;
+        const saved = rememberMessage(
+          entry.role,
+          entry.content,
+          entry.at || new Date().toISOString(),
+          entry.id,
+        );
+        const row = showMessage(
+          entry.role === "user" ? "Vy" : "AI asistent",
+          entry.content,
+          saved.at,
+          true,
+        );
+        placeHistoryRow(row, saved);
+      }
+      if (!chatHistory.length && chatUiState.open && !chatPanel.hidden)
+        showWelcomeMessage();
+      const firstRestore = !sessionInitialized;
+sessionInitialized = true;
+
+requestAnimationFrame(() => {
+  if (!chatUiState.open || chatPanel.hidden) return;
+
+  messages.scrollTo({
+    top: messages.scrollHeight,
+    behavior: "instant",
+  });
+  syncUnreadCount();
+
+  if (!firstRestore || chatMotionReduced.matches) return;
+
+  const recentRows = [
+    ...messages.querySelectorAll(".chat-message"),
+  ].slice(-5);
+
+  recentRows.forEach((row, index) => {
+    row.animate(
+      [
+        { opacity: 0, transform: "translateY(10px)" },
+        { opacity: 1, transform: "translateY(0)" },
+      ],
+      {
+        duration: 340,
+        delay: index * 45,
+        easing: "cubic-bezier(.22, 1, .36, 1)",
+        fill: "backwards",
+      },
+    );
+  });
+});
+    }
+        conversationId = data.conversationId;
+    sessionRevision = data.revision;
+    confirmationToken = data.confirmationToken ?? null;
+    intakeState = data.intake;
+    return data;
+  })();
+  try {
+    return await sessionSync;
+  } finally {
+    sessionSync = null;
   }
-
-  return context;
 }
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && questionListOpen) {
+    setQuestionListOpen(false);
+    chatHelpButton.focus();
+  }
+});
 
 function resizeMessageInput() {
   input.style.height = "24px";
@@ -524,7 +736,8 @@ function hideHelpHint() {
 
 function scheduleHelpHint() {
   hideHelpHint();
-  if (helpHintDismissed || chatHistory.some((entry) => entry.role === "user")) return;
+  if (helpHintDismissed || chatHistory.some((entry) => entry.role === "user"))
+    return;
 
   helpHintTimer = setTimeout(() => {
     if (
@@ -532,7 +745,8 @@ function scheduleHelpHint() {
       questionListOpen ||
       chatHelpButton.disabled ||
       chatHistory.some((entry) => entry.role === "user")
-    ) return;
+    )
+      return;
 
     chatHelpButton.classList.add("show-hint");
   }, 5000);
@@ -540,9 +754,9 @@ function scheduleHelpHint() {
 
 function setQuestionListOpen(open) {
   if (open) {
-  helpHintDismissed = true;
-  hideHelpHint();
-}
+    helpHintDismissed = true;
+    hideHelpHint();
+  }
   questionListOpen = open;
   questionList.classList.toggle("is-open", open);
   questionList.inert = !open;
@@ -592,7 +806,8 @@ chatHelpButton.addEventListener("mouseleave", () => {
 });
 
 questionList.addEventListener("click", (event) => {
-  const question = event.target.closest("button[data-question]")?.dataset.question;
+  const question = event.target.closest("button[data-question]")?.dataset
+    .question;
   if (!question || sendButton.disabled) return;
 
   setQuestionListOpen(false);
@@ -604,16 +819,17 @@ questionList.addEventListener("click", (event) => {
 document.addEventListener("click", (event) => {
   // Клик по кнопке открытия чата должен запустить таймер подсказки.
   if (chatHelpButton.classList.contains("show-hint")) {
-  helpHintDismissed = true;
-  hideHelpHint();
-}
+    helpHintDismissed = true;
+    hideHelpHint();
+  }
 
   if (
     !questionListOpen ||
     questionListToggle.contains(event.target) ||
     chatHelpButton.contains(event.target) ||
     questionList.contains(event.target)
-  ) return;
+  )
+    return;
 
   setQuestionListOpen(false);
 });
@@ -633,10 +849,17 @@ input.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
 
   event.preventDefault();
+
   if (!sendButton.disabled) {
-  animateManualSend();
-  form.requestSubmit(sendButton);
-}
+    const message = input.value.trim();
+
+    if (message && message.length <= 1000) {
+      input.blur();
+    }
+
+    animateManualSend();
+    form.requestSubmit(sendButton);
+  }
 });
 
 const chatMotionReduced = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -648,11 +871,11 @@ chatOpen.addEventListener("click", () => {
   chatPrompt.hidden = true;
   chatUiState.open = true;
   isFirstVisit = false;
-try {
-  localStorage.setItem(CHAT_OPENED_KEY, "1");
-} catch {
-  // Чат работает и без этой отметки.
-}
+  try {
+    localStorage.setItem(CHAT_OPENED_KEY, "1");
+  } catch {
+    // Чат работает и без этой отметки.
+  }
   saveChatOpenState();
   chatPrompt.classList.remove("is-first-visit");
   chatHint.hidden = true;
@@ -668,9 +891,9 @@ try {
     chatPanel.animate(
       [
         { opacity: 0, transform: "translateY(20px)" },
-        { opacity: 1, transform: "translateY(0)" }
+        { opacity: 1, transform: "translateY(0)" },
       ],
-      { duration: 420, easing: "cubic-bezier(.22, 1, .36, 1)" }
+      { duration: 420, easing: "cubic-bezier(.22, 1, .36, 1)" },
     );
   }
 
@@ -679,24 +902,25 @@ try {
 
     if (!hadMessages || chatMotionReduced.matches) return;
 
-    const recentRows = [...messages.querySelectorAll(".chat-message")].slice(-5);
+    const recentRows = [...messages.querySelectorAll(".chat-message")].slice(
+      -5,
+    );
 
     recentRows.forEach((row, index) => {
       row.animate(
         [
           { opacity: 0, transform: "translateY(10px)" },
-          { opacity: 1, transform: "translateY(0)" }
+          { opacity: 1, transform: "translateY(0)" },
         ],
         {
           duration: 340,
           delay: index * 45,
           easing: "cubic-bezier(.22, 1, .36, 1)",
-          fill: "backwards"
-        }
+          fill: "backwards",
+        },
       );
     });
   });
-  input.focus();
 });
 
 const chatExpand = document.querySelector("#chat-expand");
@@ -713,9 +937,9 @@ chatClose.addEventListener("click", async () => {
     const animation = chatPanel.animate(
       [
         { opacity: 1, transform: "translateY(0)" },
-        { opacity: 0, transform: "translateY(18px)" }
+        { opacity: 0, transform: "translateY(18px)" },
       ],
-      { duration: 190, easing: "ease-in", fill: "forwards" }
+      { duration: 190, easing: "ease-in", fill: "forwards" },
     );
 
     await animation.finished;
@@ -736,15 +960,17 @@ function setChatExpanded(expanded) {
   chatPanel.classList.toggle("is-expanded", expanded);
   chatExpand.setAttribute(
     "aria-label",
-    expanded ? "Zmenšit chat" : "Zvětšit chat"
+    expanded ? "Zmenšit chat" : "Zvětšit chat",
   );
 
-  chatExpand.querySelector("path").setAttribute(
-    "d",
-    expanded
-      ? "M5 5l8 8m0-7v7H6M25 25l-8-8m0 7v-7h7"
-      : "M13 13 5 5M5 12V5h7M17 17l8 8m-7 0h7v-7"
-  );
+  chatExpand
+    .querySelector("path")
+    .setAttribute(
+      "d",
+      expanded
+        ? "M5 5l8 8m0-7v7H6M25 25l-8-8m0 7v-7h7"
+        : "M13 13 5 5M5 12V5h7M17 17l8 8m-7 0h7v-7",
+    );
 }
 
 chatExpand.addEventListener("click", () => {
@@ -765,16 +991,20 @@ function scrollMessagesToBottom() {
     top: messages.scrollHeight,
     behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
       ? "auto"
-      : "smooth"
+      : "smooth",
   });
 }
 
 newMessagesButton.addEventListener("click", scrollMessagesToBottom);
 
-messages.addEventListener("scroll", () => {
-  if (isNearMessagesBottom()) syncUnreadCount();
-  else updateInChatNotice();
-}, { passive: true });
+messages.addEventListener(
+  "scroll",
+  () => {
+    if (isNearMessagesBottom()) syncUnreadCount();
+    else updateInChatNotice();
+  },
+  { passive: true },
+);
 
 function refreshChatAfterReturn() {
   expireChatHistoryIfNeeded();
@@ -786,7 +1016,84 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") refreshChatAfterReturn();
 });
 
-function showMessage(author, text, at = new Date().toISOString(), restored = false) {
+function renderAssistantText(container, text) {
+  container.replaceChildren();
+
+  const lines = String(text).split("\n");
+  const cells = (line) =>
+    line.trim().replace(/^\|/, "").replace(/\|$/, "")
+      .split("|").map((cell) => cell.trim());
+
+  const isSeparator = (line) => {
+    if (!line?.trim().startsWith("|")) return false;
+    return cells(line).every((cell) => /^:?-{3,}:?$/.test(cell));
+  };
+
+  let index = 0;
+
+  while (index < lines.length) {
+    if (
+      lines[index].trim().startsWith("|") &&
+      isSeparator(lines[index + 1])
+    ) {
+      const headers = cells(lines[index]);
+      const wrapper = document.createElement("div");
+      wrapper.className = "chat-price-table";
+
+      const table = document.createElement("table");
+      const head = document.createElement("thead");
+      const headerRow = document.createElement("tr");
+
+      for (const label of headers) {
+        const cell = document.createElement("th");
+        cell.scope = "col";
+        cell.textContent = label;
+        headerRow.append(cell);
+      }
+
+      head.append(headerRow);
+      table.append(head);
+
+      const body = document.createElement("tbody");
+      index += 2;
+
+      while (
+        index < lines.length &&
+        lines[index].trim().startsWith("|") &&
+        cells(lines[index]).length === headers.length
+      ) {
+        const row = document.createElement("tr");
+
+        for (const value of cells(lines[index])) {
+          const cell = document.createElement("td");
+          cell.textContent = value;
+          row.append(cell);
+        }
+
+        body.append(row);
+        index++;
+      }
+
+      table.append(body);
+      wrapper.append(table);
+      container.append(wrapper);
+    } else {
+      container.append(
+        document.createTextNode(
+          lines[index] + (index < lines.length - 1 ? "\n" : ""),
+        ),
+      );
+      index++;
+    }
+  }
+}
+
+function showMessage(
+  author,
+  text,
+  at = new Date().toISOString(),
+  restored = false,
+) {
   const isUser = author === "Vy";
   const isNearBottom = isNearMessagesBottom();
   const row = document.createElement("div");
@@ -811,12 +1118,17 @@ function showMessage(author, text, at = new Date().toISOString(), restored = fal
   time.dateTime = at;
   time.textContent = now.toLocaleTimeString("cs-CZ", {
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
   });
 
   const content = document.createElement("div");
   content.className = "chat-message__text";
+
+if (isUser) {
   content.textContent = text;
+} else {
+  renderAssistantText(content, text);
+}
 
   meta.append(name, time);
   bubble.append(content);
@@ -843,11 +1155,13 @@ function showMessage(author, text, at = new Date().toISOString(), restored = fal
 function placeHistoryRow(row, entry) {
   row.dataset.historyId = entry.id;
 
-  for (const other of messages.querySelectorAll(".chat-message[data-history-id]")) {
+  for (const other of messages.querySelectorAll(
+    ".chat-message[data-history-id]",
+  )) {
     if (other === row) continue;
     const otherEntry = {
       id: other.dataset.historyId,
-      at: other.querySelector("time").dateTime
+      at: other.querySelector("time").dateTime,
     };
     if (compareHistoryEntries(entry, otherEntry) < 0) {
       messages.insertBefore(row, other);
@@ -855,8 +1169,11 @@ function placeHistoryRow(row, entry) {
     }
   }
 
-  const unsavedRow = [...messages.children].find((other) =>
-    other !== row && other.classList.contains("chat-message") && !other.dataset.historyId
+  const unsavedRow = [...messages.children].find(
+    (other) =>
+      other !== row &&
+      other.classList.contains("chat-message") &&
+      !other.dataset.historyId,
   );
   if (unsavedRow) messages.insertBefore(row, unsavedRow);
   else messages.append(row);
@@ -882,8 +1199,13 @@ function showTypingMessage() {
 }
 
 function finishTypingMessage(row, text) {
-  const isNearBottom =
-    messages.scrollHeight - messages.scrollTop - messages.clientHeight < 96;
+  const wasNearBottom = isNearMessagesBottom();
+
+  // Выезд строки остаётся только при появлении точек.
+  row.style.animation = "none";
+  for (const animation of row.getAnimations()) {
+    animation.cancel();
+  }
 
   const body = row.querySelector(".chat-message__body");
   const bubble = row.querySelector(".chat-message__bubble");
@@ -891,22 +1213,23 @@ function finishTypingMessage(row, text) {
 
   const before = bubble.getBoundingClientRect();
 
-  content.textContent = text;
+  renderAssistantText(content, text);
 
   const after = bubble.getBoundingClientRect();
   const bodyWidth = body.getBoundingClientRect().width;
   const textWidth = content.getBoundingClientRect().width;
 
   const reducedMotion = window.matchMedia(
-    "(prefers-reduced-motion: reduce)"
+    "(prefers-reduced-motion: reduce)",
   ).matches;
 
-  if (reducedMotion || before.width === 0 || after.width === 0) {
-    if (isNearBottom) requestAnimationFrame(scrollMessagesToBottom);
+  if (reducedMotion || !before.width || !after.width) {
+    if (wasNearBottom) {
+      requestAnimationFrame(scrollMessagesToBottom);
+    }
     return;
   }
 
-  // Текст сохраняет итоговые переносы, пока пузырь расширяется.
   body.style.width = `${bodyWidth}px`;
   content.style.width = `${textWidth}px`;
   bubble.style.boxSizing = "border-box";
@@ -914,65 +1237,119 @@ function finishTypingMessage(row, text) {
 
   const expansion = bubble.animate(
     [
-      { width: `${before.width}px`, height: `${before.height}px` },
-      { width: `${after.width}px`, height: `${after.height}px` }
+      {
+        width: `${before.width}px`,
+        height: `${before.height}px`,
+      },
+      {
+        width: `${after.width}px`,
+        height: `${after.height}px`,
+      },
     ],
     {
       duration: 520,
-      easing: "cubic-bezier(0.22, 1, 0.36, 1)"
-    }
+      easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+    },
   );
 
   content.animate(
-    [
-      { opacity: 0, transform: "translateY(4px)" },
-      { opacity: 0, transform: "translateY(4px)", offset: 0.4 },
-      { opacity: 1, transform: "translateY(0)" }
-    ],
-    { duration: 520, easing: "ease-out" }
+    [{ opacity: 0 }, { opacity: 1 }],
+    { duration: 400, easing: "ease-out" },
   );
 
-  expansion.onfinish = () => {
+  const cleanup = () => {
     body.style.removeProperty("width");
     content.style.removeProperty("width");
     bubble.style.removeProperty("box-sizing");
     bubble.style.removeProperty("overflow");
 
-    if (isNearBottom) scrollMessagesToBottom();
+    if (wasNearBottom) scrollMessagesToBottom();
   };
+
+  expansion.onfinish = cleanup;
+  expansion.oncancel = cleanup;
 }
 
 function showWelcomeMessage() {
-  if (messages.querySelector(".chat-message")) return;
+  if (welcomeTask) return welcomeTask;
 
   const generation = chatGeneration;
-  sendButton.disabled = true;
-  isAiTyping = true;
-  updateLauncherStatus();
-  updateSuggestions();
-  const row = showTypingMessage();
 
-  setTimeout(() => {
-    if (generation !== chatGeneration) return;
-    if (chatHistory.some((entry) => entry.role === "welcome" || entry.role === "user")) {
-      row.remove();
-      isAiTyping = false;
-      updateLauncherStatus();
-      sendButton.disabled = false;
+  welcomeTask = Promise.resolve().then(async () => {
+    let typingRow = null;
+    let startedTyping = false;
+
+    try {
+      sendButton.disabled = true;
       updateSuggestions();
-      return;
+
+      // Сначала восстанавливаем существующий разговор.
+      await syncServerSession();
+
+      if (
+        generation !== chatGeneration ||
+        messages.querySelector(".chat-message")
+      ) {
+        return;
+      }
+
+      const welcomeText =
+        "Dobrý den! 👋 S čím vám mohu pomoci? Napište mi, co se děje s vaším autem, nebo se zeptejte na služby, ceny či možnosti online objednání do servisu.";
+
+      isAiTyping = true;
+      startedTyping = true;
+      updateLauncherStatus();
+
+      typingRow = showTypingMessage();
+
+      const reducedMotion = window.matchMedia(
+        "(prefers-reduced-motion: reduce)",
+      ).matches;
+
+      if (!reducedMotion) {
+        await new Promise((resolve) => setTimeout(resolve, 900));
+      }
+
+      if (
+        generation !== chatGeneration ||
+        !typingRow.isConnected
+      ) {
+        typingRow.remove();
+        return;
+      }
+
+      finishTypingMessage(typingRow, welcomeText);
+
+      const welcomeEntry = rememberMessage(
+        "welcome",
+        welcomeText,
+        typingRow.querySelector("time").dateTime,
+        "welcome",
+      );
+
+      placeHistoryRow(typingRow, welcomeEntry);
+    } catch (error) {
+      typingRow?.remove();
+
+      if (generation === chatGeneration) {
+        showMessage(
+          "AI asistent",
+          error.message || uiMessages.restoreFailed,
+        );
+      }
+    } finally {
+      welcomeTask = null;
+
+      if (generation === chatGeneration) {
+        if (startedTyping) isAiTyping = false;
+        sendButton.disabled = false;
+        updateLauncherStatus();
+        updateSuggestions();
+      }
     }
+  });
 
-    const welcomeText = "Dobrý den! 👋 S čím vám mohu pomoci? Napište mi, co se děje s vaším autem, nebo se zeptejte na služby, ceny či možnosti online objednání do servisu.";
-    finishTypingMessage(row, welcomeText);
-    const welcomeEntry = rememberMessage("welcome", welcomeText, row.querySelector("time").dateTime, "welcome");
-    placeHistoryRow(row, welcomeEntry);
-
-    isAiTyping = false;
-    updateLauncherStatus();
-    sendButton.disabled = false;
-    updateSuggestions();
-  }, 2000);
+  return welcomeTask;
 }
 
 form.addEventListener("submit", async (event) => {
@@ -981,28 +1358,63 @@ form.addEventListener("submit", async (event) => {
 
   const message = input.value.trim();
 
-messages
-  .querySelectorAll(".chat-message--validation-error")
-  .forEach((row) => row.remove());
+  messages
+    .querySelectorAll(".chat-message--validation-error")
+    .forEach((row) => row.remove());
 
-if (!message || message.length > 1000) {
-  const errorRow = showMessage(
-    "AI asistent",
-    "Zadejte zprávu o délce 1 až 1000 znaků."
-  );
-  errorRow.classList.add("chat-message--validation-error");
-  return;
-}
+  if (!message || message.length > 1000) {
+    const errorRow = showMessage(
+      "AI asistent",
+      uiMessages.invalidMessage,
+    );
+    errorRow.classList.add("chat-message--validation-error");
+    return;
+  }
 
-  const history = getRecentContext();
-  const intake = intakeState;
+  helpHintDismissed = true;
+  hideHelpHint();
+
+    const displayedState = {
+    conversationId,
+    revision: sessionRevision,
+    confirmationToken,
+  };
+
+  sendButton.disabled = true;
+
+  try {
+    await syncServerSession();
+  } catch (error) {
+    sendButton.disabled = false;
+    showMessage("AI asistent", error.message);
+    return;
+  }
+
+  const stateChanged =
+    displayedState.conversationId !== conversationId ||
+    displayedState.revision !== sessionRevision ||
+    displayedState.confirmationToken !== confirmationToken;
+
+  if (stateChanged) {
+    sendButton.disabled = false;
+    sendButton.classList.remove("is-sending");
+    updateSuggestions();
+    scrollMessagesToBottom();
+    input.focus();
+    return;
+  }
+
   const generation = chatGeneration;
   sendButton.disabled = true;
   isAiTyping = true;
   updateLauncherStatus();
   updateSuggestions();
   const userRow = showMessage("Vy", message);
-  const userEntry = rememberMessage("user", message, userRow.querySelector("time").dateTime);
+  const userEntry = rememberMessage(
+    "user",
+    message,
+    userRow.querySelector("time").dateTime,
+  );
   placeHistoryRow(userRow, userEntry);
   try {
     sessionStorage.setItem(PENDING_CHAT_MESSAGE_KEY, userEntry.id);
@@ -1020,7 +1432,7 @@ if (!message || message.length > 1000) {
       }
       resolve({
         row: showTypingMessage(),
-        shownAt: performance.now()
+        shownAt: performance.now(),
       });
     }, 650);
   });
@@ -1029,6 +1441,8 @@ if (!message || message.length > 1000) {
     let reply;
     let nextIntake = null;
     let replyRole = "assistant";
+    let serverUserMessage = null;
+    let serverAssistantMessage = null;
 
     try {
       let response;
@@ -1038,40 +1452,68 @@ if (!message || message.length > 1000) {
         response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, history, intake }),
-          signal: AbortSignal.timeout(30000)
+          body: JSON.stringify({
+            message,
+            confirmationToken,
+            messageId: userEntry.id,
+            conversationId,
+          }),
+          signal: AbortSignal.timeout(75000),
         });
 
         data = await response.json();
       } catch (error) {
         if (error?.name === "TimeoutError" || error?.name === "AbortError") {
-          throw new Error("Odpověď trvá příliš dlouho. Zkuste to prosím znovu.");
+          throw new Error(
+            uiMessages.timeout,
+          );
         }
 
         if (!response) {
-          throw new Error("Nepodařilo se připojit k serveru. Zkuste to prosím později.");
+          throw new Error(
+            uiMessages.connectionFailed,
+          );
         }
 
-        throw new Error("Odpověď se nepodařilo načíst. Zkuste to prosím znovu.");
+        throw new Error(
+          uiMessages.unreadableReply,
+        );
       }
 
       if (!response.ok) {
         throw new Error(
           typeof data?.error === "string" && data.error.trim()
             ? data.error
-            : "Zprávu se nepodařilo zpracovat. Zkuste to prosím později."
+            : uiMessages.requestFailed,
         );
       }
 
       if (typeof data?.reply !== "string" || !data.reply.trim()) {
-        throw new Error("AI asistent nyní nemůže odpovědět. Zkuste to prosím později.");
+        throw new Error(
+          uiMessages.unavailable,
+        );
       }
 
+      if (
+        generation !== chatGeneration ||
+        data.conversationId !== conversationId
+      )
+        return;
+            sessionRevision = data.revision;
+
+      confirmationToken =
+        typeof data.confirmationToken === "string"
+          ? data.confirmationToken
+          : null;
+
+      receiveClientMessages(data);
       reply = data.reply;
       nextIntake = data.intake;
+      serverUserMessage = data.userMessage;
+      serverAssistantMessage = data.assistantMessage;
     } catch (error) {
       replyRole = "error";
-      reply = error.message || "Zprávu se nepodařilo odeslat. Zkuste to znovu.";
+      reply = error.message || uiMessages.requestFailed;
     }
 
     reply = limitMessageLength(reply);
@@ -1090,7 +1532,11 @@ if (!message || message.length > 1000) {
       return;
     }
 
-    if (replyRole === "assistant" && nextIntake && typeof nextIntake === "object") {
+    if (
+      replyRole === "assistant" &&
+      nextIntake &&
+      typeof nextIntake === "object"
+    ) {
       intakeState = nextIntake;
       try {
         localStorage.setItem(CHAT_INTAKE_KEY, JSON.stringify(nextIntake));
@@ -1099,15 +1545,62 @@ if (!message || message.length > 1000) {
       }
     }
 
+        if (
+      replyRole === "assistant" &&
+      isValidHistoryEntry(serverUserMessage) &&
+      serverUserMessage.id === userEntry.id
+    ) {
+      chatHistory = chatHistory.filter(
+        (entry) => entry.id !== userEntry.id,
+      );
+
+      const savedUser = rememberMessage(
+        "user",
+        serverUserMessage.content,
+        serverUserMessage.at,
+        serverUserMessage.id,
+      );
+
+      const userTime = userRow.querySelector("time");
+      userTime.dateTime = savedUser.at;
+      userTime.textContent = new Date(savedUser.at).toLocaleTimeString(
+        "cs-CZ",
+        { hour: "2-digit", minute: "2-digit" },
+      );
+
+            // Обновляем историю без повторной анимации сообщения клиента.
+      userRow.style.animation = "none";
+
+      for (const animation of userRow.getAnimations()) {
+        animation.cancel();
+      }
+
+      placeHistoryRow(userRow, savedUser);
+    }
+
     finishTypingMessage(row, reply);
+
+    const serverReply =
+      replyRole === "assistant" &&
+      isValidHistoryEntry(serverAssistantMessage)
+        ? serverAssistantMessage
+        : null;
+
     const replyTime = row.querySelector("time");
-    const now = new Date();
-    replyTime.dateTime = now.toISOString();
-    replyTime.textContent = now.toLocaleTimeString("cs-CZ", {
+    const replyAt = serverReply?.at ?? new Date().toISOString();
+
+    replyTime.dateTime = replyAt;
+    replyTime.textContent = new Date(replyAt).toLocaleTimeString("cs-CZ", {
       hour: "2-digit",
-      minute: "2-digit"
+      minute: "2-digit",
     });
-    const replyEntry = rememberMessage(replyRole, reply, replyTime.dateTime);
+
+    const replyEntry = rememberMessage(
+      replyRole,
+      reply,
+      replyAt,
+      serverReply?.id ?? makeMessageId(),
+    );
     try {
       if (sessionStorage.getItem(PENDING_CHAT_MESSAGE_KEY) === userEntry.id) {
         sessionStorage.removeItem(PENDING_CHAT_MESSAGE_KEY);
@@ -1147,11 +1640,13 @@ async function loadCompany() {
 
       if (service.options?.length) {
         const details = document.createElement("small");
-        details.textContent = service.options.map((option) =>
-          option.priceLabel
-            ? `${option.name} — ${option.priceLabel}`
-            : option.name
-        ).join(" · ");
+        details.textContent = service.options
+          .map((option) =>
+            option.priceLabel
+              ? `${option.name} — ${option.priceLabel}`
+              : option.name,
+          )
+          .join(" · ");
         item.append(document.createElement("br"), details);
       }
 
@@ -1220,3 +1715,5 @@ if (new URLSearchParams(window.location.search).has("glass-preview")) {
     </div>`;
   document.body.prepend(scene);
 }
+
+void syncServerSession().catch(() => {});
