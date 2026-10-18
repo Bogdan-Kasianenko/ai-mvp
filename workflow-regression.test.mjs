@@ -41,8 +41,14 @@ function full() {
     additionalServicesReviewed: true,
     preferredTime: "25. 10. 2026",
   });
-  Object.assign(s.vehicle, { brand: "Suzuki", model: "Swift", year: "2018" });
-  Object.assign(s.customer, {
+  Object.assign(s.vehicle, {
+    brand: "Suzuki",
+    model: "Swift",
+    year: "2018",
+    engine: "1,4 l",
+    fuel: "benzín",
+  });
+    Object.assign(s.customer, {
     name: "Test Customer",
     email: "test@example.com",
   });
@@ -304,6 +310,7 @@ function modelPayload() {
     reply: "Děkuji.",
     language: "cs",
     priceQuoted: false,
+        keepClosedDay: false,
     needsClarification: false,
     statusFollowUp: "",
     submissionAction: "none",

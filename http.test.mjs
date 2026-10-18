@@ -22,7 +22,7 @@ test("HTTP workflow: trusted collection, price detour, consent, status, reload a
         customerParts: true,
         oilFilterScopeReviewed: true,
         additionalServicesReviewed: true,
-        preferredTime: "25. 10. 2026",
+                preferredTime: "2026-10-26",
       });
       Object.assign(intake.vehicle, {
         brand: "Suzuki",

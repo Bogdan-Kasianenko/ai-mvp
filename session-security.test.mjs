@@ -472,7 +472,7 @@ test("status distinguishes the delivered request from an unsent date amendment",
   await h.call({message:'ano',confirmationToken:stale.body.confirmationToken},offer.sessionId);
   assert.equal(h.sent.length,2);
   assert.equal(h.sent[0].preferredTime,originalDate);
-  assert.equal(h.sent[1].preferredTime,'26. 10. 2026');
+    assert.equal(h.sent[1].preferredTime,'2026-10-26');
   h.setBehavior(async (_m,_c,_h,intake)=>({kind:'reply',text:'Status',intake,submissionAction:'ask_status'}));
   const updatedStatus = await h.call({message:'Uz odeslano?'},offer.sessionId);
   assert.match(updatedStatus.body.reply,/Ano, žádost byla odeslána/);
