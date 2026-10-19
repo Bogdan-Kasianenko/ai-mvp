@@ -57,12 +57,19 @@ export function createChatSessionStore({
         value: () => {
           if (session.busy) return false;
           if (!repository.lock(session.id, owner)) return false;
-          const current = repository.load(session.id);
-          if (current) Object.assign(session, current);
-          session.expiresAt = now() + SESSION_TTL;
-          session.busy = true;
-          active.set(session.id, session);
-          return true;
+          try {
+  const current = repository.load(session.id);
+  if (current) Object.assign(session, current);
+  session.expiresAt = now() + SESSION_TTL;
+  session.busy = true;
+  active.set(session.id, session);
+  return true;
+} catch (error) {
+  session.busy = false;
+  active.delete(session.id);
+  repository.unlock(session.id, owner);
+  throw error;
+}
         },
       });
       Object.defineProperty(session, "release", {
