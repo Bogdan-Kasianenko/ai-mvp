@@ -87,6 +87,13 @@ export function createApp({ chatOptions = {}, sessionOptions = {} } = {}) {
         error: t.invalidBody,
       });
     }
+    if (error.code === "SESSION_CREATION_LIMIT") {
+  return response.status(429).json({ error: t.limit });
+}
+
+if (error.code === "SESSION_CAPACITY") {
+  return response.status(503).json({ error: t.unavailable });
+}
     if (error instanceof APIConnectionTimeoutError) {
       return response.status(503).json({
         error: t.timeout,

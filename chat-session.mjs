@@ -30,6 +30,26 @@ export function createChatSessionStore({
     let session = active.get(token) ?? repository.load(token ?? "");
     if (session?.expiresAt <= now()) session = null;
     const created = !session;
+    if (created) {
+  repository.cleanup();
+
+  if (repository.sessionCount() >= 1000) {
+    throw Object.assign(new Error("Session capacity reached"), {
+      status: 503,
+      code: "SESSION_CAPACITY",
+    });
+  }
+
+  if (
+    !repository.allow("session-create-ip:" + request.ip, 30, 60000) ||
+    !repository.allow("session-create-global", 120, 60000)
+  ) {
+    throw Object.assign(new Error("Session creation limit reached"), {
+      status: 429,
+      code: "SESSION_CREATION_LIMIT",
+    });
+  }
+}
     if (!session)
       session = {
         id: randomBytes(32).toString("hex"),
@@ -84,14 +104,7 @@ export function createChatSessionStore({
         },
       });
     }
-    if (created) {
-      repository.cleanup();
-      if (repository.sessionCount() >= 1000)
-        throw Object.assign(new Error("Session capacity reached"), {
-          status: 503,
-        });
-      repository.save(session);
-    }
+    if (created) repository.save(session);
     response.cookie("caro_session", session.id, {
       httpOnly: true,
       sameSite: "strict",

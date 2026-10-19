@@ -28,7 +28,13 @@ function harness(repo) {
       response.set = () => response;
       response.status = code => { response.code = code; return response; };
       response.json = body => { response.body = body; response.writableEnded = true; return response; };
-      await handler({ body: { message: "test" }, headers: { cookie: cookie ? `caro_session=${cookie}` : "" }, ip, secure: false }, response);
+      try {
+  await handler({ body: { message: "test" }, headers: { cookie: cookie ? `caro_session=${cookie}` : "" }, ip, secure: false }, response);
+      } catch (error) {
+        // Match the outer HTTP error handler for early session-creation limits.
+        if (error.code !== "SESSION_CREATION_LIMIT") throw error;
+        response.status(429).json({ error: "Session creation limit reached" });
+      }
       return response;
     },
   };
