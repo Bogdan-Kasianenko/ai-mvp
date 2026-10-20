@@ -1,3 +1,13 @@
+import { inspectAppointmentPreference } from "./appointment-calendar.mjs";
+import {
+  partKeys,
+  emptyPartsOverrides,
+  normalizePartsOverrides,
+  needsOilEngine,
+  hasUnspecifiedPartsSupply,
+} from "./parts-supply.mjs";
+import { inspectPhone, normalizePhone } from "./phone-contact.mjs";
+
 const nullableText = { type: ["string", "null"] };
 
 function objectSchema(properties) {
@@ -30,6 +40,9 @@ const intakeSchema = objectSchema({
     enum: ["general", "service_discussion", "service_request"],
   },
   customerParts: { type: ["boolean", "null"] },
+  partsOverrides: objectSchema(Object.fromEntries(
+    partKeys.map((key) => [key, { type: ["boolean", "null"] }]),
+  )),
   oilFilterScopeReviewed: { type: "boolean" },
   additionalServicesReviewed: { type: "boolean" },
     pendingDetails: {
@@ -65,9 +78,36 @@ const intakeSchema = objectSchema({
 });
 
 export const intakeResponseSchema = objectSchema({
-  reply: { type: "string" },
+  reply: {
+    type: "string",
+    description: "When oilPriceMode is requested or automatic: a short natural reaction without currency amounts, without announcing the price table, and without a follow-up question. Put that question only in oilPriceFollowUp.",
+  },
   language: { type: "string", enum: ["cs", "sk", "en", "ru", "uk", "de"] },
   priceQuoted: { type: "boolean" },
+   partsAction: { type: "string", enum: ["keep", "update"] },
+  oilPriceMode: {
+    type: "string",
+    enum: ["none", "automatic", "requested"],
+    description: "Use requested for ANY answer about an oil/filter labor price, including correcting a previous wrong price. Use automatic for a proactive price update. none is only for responses without an oil/filter labor price. Never put oil/filter monetary amounts in reply.",
+  },
+  oilPriceRequests: {
+    type: "array",
+    description: "Exact oil/filter operations to quote. Required whenever oilPriceMode is requested or automatic. Server supplies all amounts. Include the operation even when correcting a previously stated price.",
+    items: objectSchema({
+      optionId: {
+        type: "string",
+        enum: ["engine_oil", "air_filter", "cabin_filter", "fuel_filter", "lpg_filter"],
+      },
+      source: {
+        type: "string",
+        enum: ["selected", "service", "customer", "compare"],
+      },
+    }),
+  },
+  oilPriceFollowUp: {
+    type: "string",
+    description: "One follow-up question after the price table. Do not repeat it or paraphrase it in reply. No amounts.",
+  },
   keepClosedDay: { type: "boolean" },
   needsClarification: { type: "boolean" },
   statusFollowUp: { type: "string" },
@@ -82,6 +122,7 @@ export function emptyIntakeState() {
   return {
     intent: "general",
     customerParts: null,
+    partsOverrides: emptyPartsOverrides(),
     oilFilterScopeReviewed: false,
     additionalServicesReviewed: false,
         pendingDetails: [],
@@ -128,6 +169,10 @@ export function normalizeIntakeState(value, company) {
   if (typeof value.customerParts === "boolean") {
     state.customerParts = value.customerParts;
   }
+  state.partsOverrides = normalizePartsOverrides(
+    value.partsOverrides,
+    state.customerParts,
+  );
   state.oilFilterScopeReviewed = value.oilFilterScopeReviewed === true;
 
   state.additionalServicesReviewed = value.additionalServicesReviewed === true;
@@ -168,6 +213,8 @@ export function normalizeIntakeState(value, company) {
   for (const field of Object.keys(state.customer)) {
     state.customer[field] = cleanText(value.customer?.[field], 150);
   }
+  state.customer.phone = normalizePhone(state.customer.phone);
+
   state.preferredTime = cleanText(value.preferredTime, 150);
   state.skipped = Array.isArray(value.skipped)
     ? [
@@ -182,11 +229,8 @@ export function normalizeIntakeState(value, company) {
 
 export function hasValidContact(customer) {
   const email = String(customer?.email ?? "").trim();
-  const phone = String(customer?.phone ?? "").replace(/[\s().-]/g, "");
-
-  return (
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || /^\+?\d{9,15}$/.test(phone)
-  );
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    inspectPhone(customer?.phone).valid;
 }
 
 export function requiresParts(state, company) {
@@ -223,23 +267,17 @@ export function missingIntakeFields(state, company) {
   if (!state.vehicle.year && !state.skipped.includes("vehicle.year"))
     missing.push("vehicle.year");
 
-    const needsOilEngine =
-    state.serviceId === "oil_filters" &&
-    state.customerParts === false &&
-    (
-      state.serviceOptionId === "engine_oil" ||
-      state.serviceOptionId === null
-    );
+    const oilEngineRequired = needsOilEngine(state);
 
   if (
-    needsOilEngine &&
+    oilEngineRequired &&
     !state.vehicle.engine &&
     !state.skipped.includes("vehicle.engine")
   ) {
     missing.push("vehicle.engine");
   }
 
-  if (!state.preferredTime) missing.push("preferredTime");
+  if (!inspectAppointmentPreference(state.preferredTime).valid) missing.push("preferredTime");
   if (!state.customer.name) missing.push("customer.name");
   if (!hasValidContact(state.customer)) missing.push("customer.contact");
   if (
@@ -248,8 +286,11 @@ export function missingIntakeFields(state, company) {
     state.oilFilterScopeReviewed !== true
   ) missing.push("oilFilterScopeReviewed");
 
-  if (requiresParts(state, company) && state.customerParts === null)
-    missing.push("customerParts");
+  if (
+  requiresParts(state, company) &&
+  hasUnspecifiedPartsSupply(state)
+)
+  missing.push("customerParts");
   return missing;
 }
 

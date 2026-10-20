@@ -76,7 +76,7 @@ export function createRepository(path = ":memory:") {
       db.exec("BEGIN IMMEDIATE");
       try {
         db.prepare("DELETE FROM attempts WHERE time<?").run(
-          Date.now() - 3600000,
+          Date.now() - 24 * 60 * 60 * 1000,
         );
         const count = db
           .prepare(

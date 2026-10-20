@@ -33,7 +33,12 @@ test("oil with service parts requires engine details or an explicit skip; own pa
 });
 
 test("the model response must contain a boolean keepClosedDay field", () => {
+  
   const response = {
+    partsAction: "keep",
+    oilPriceMode: "none",
+    oilPriceRequests: [],
+    oilPriceFollowUp: "",
     reply: "Děkuji.", language: "cs", priceQuoted: false, keepClosedDay: false,
     needsClarification: false, statusFollowUp: "", submissionAction: "none", intake: complete(),
   };

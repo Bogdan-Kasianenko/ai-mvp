@@ -35,7 +35,7 @@ function fullIntake() {
 let harnessNumber = 0;
 function makeHarness() {
   const baseline = fullIntake();
-  baseline.preferredTime += ` test-${++harnessNumber}`;
+  baseline.requestedWork += ` test-${++harnessNumber}`;
   const store = createChatSessionStore();
   const sessions = new Map();
   let behavior = async (_message, _company, _history, intake) => ({

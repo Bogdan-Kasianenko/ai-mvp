@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { describeParts } from "./parts-supply.mjs";
 
 const appPassword = process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, "");
 
@@ -28,12 +29,13 @@ export function buildRequestEmail(intake, company, requestId) {
   const option = service?.options?.find(
     (item) => item.id === intake.serviceOptionId,
   );
-  const parts =
+  const defaultParts =
     intake.customerParts === true
       ? "vlastní díly zákazníka"
       : intake.customerParts === false
         ? "díly zajistí servis"
         : "není potřeba / neuvedeno";
+        const parts = describeParts(intake, "cs", defaultParts);
   return [
     `Žádost: ${line(requestId)}`,
     `Služba: ${line(intake.requestedWork || option?.name || service?.name)}`,

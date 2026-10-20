@@ -1,6 +1,10 @@
 import { getReply } from "./service.mjs";
+import { APIConnectionTimeoutError, APIConnectionError, InternalServerError } from "openai";
+import { beginPendingChat, finishPendingChat, failPendingChat, chatSessionSnapshot, previousSentRequest } from "./pending-chat.mjs";
 import {
   reviewAppointment,
+  appointmentIssueMessage,
+  inspectAppointmentPreference,
   closedDayMessage,
   closedDayNote,
 } from "./appointment-calendar.mjs";
@@ -63,15 +67,17 @@ export function createChatHandler({
         .status(409)
         .json({ error: messages(session.language).busy });
     const controller = new AbortController();
-    const onClose = () => {
-      if (!response.writableEnded) controller.abort();
-    };
-    response.on("close", onClose);
+    // Browser disconnects do not cancel accepted work.
+    const deadline = setTimeout(() => controller.abort(), 65000);
+    deadline.unref?.();
     try {
       if (conversationId != null && conversationId !== session.requestId)
         return response
           .status(409)
           .json({ error: errors.staleConversation });
+      // If this lock was acquired while a persisted request remained, its old
+      // worker is gone. Record failure; never replay a possible mail operation.
+      failPendingChat(session);
       const cached =
         messageId && session.responses?.find((item) => item.id === messageId);
             if (cached) {
@@ -87,7 +93,9 @@ export function createChatHandler({
 
         const cachedToken = cached.body.confirmationToken ?? null;
 
+        const cachedDateValid = !cachedToken || inspectAppointmentPreference(cached.body.intake?.preferredTime).valid;
         const matchesCurrentState =
+          cachedDateValid &&
           cached.body.conversationId === session.requestId &&
           cached.body.revision === session.revision &&
           cachedToken === currentToken;
@@ -104,6 +112,9 @@ export function createChatHandler({
           clientMessages: clientMessages(session.language),
         });
       }
+      if (messageId && session.history.some(entry => entry.role === "user" && entry.id === messageId)) {
+        return response.status(409).json({ error: errors.staleConversation });
+      }
       const repo = session.repository;
       if (
         repo.activeCount() > 12 ||
@@ -118,10 +129,22 @@ export function createChatHandler({
         structuredClone(session.intake),
         company,
       );
-      const history = session.history.map(({ role, content }) => ({
-        role,
-        content,
-      }));
+      // Короткий контекст для ИИ; полная переписка остаётся в session.history.
+const history = session.history.slice(-30).map(({ role, content }) => ({
+  role,
+  content,
+}));
+
+while (
+  history.reduce((total, entry) => total + entry.content.length, 0) > 24000
+) {
+  history.shift();
+}
+      const userMessage = beginPendingChat(session, message, messageId);
+      const rejectPending = (status, body) => {
+        failPendingChat(session, body.error ?? messages(session.language).unavailable);
+        if (!response.destroyed && !response.writableEnded) return response.status(status).json(body);
+      };
       const answer = (
         body,
         { confirm = false, preserveConfirmation = false } = {},
@@ -137,33 +160,7 @@ export function createChatHandler({
         if (confirm) prepareConfirmation(session);
         else if (!preserveConfirmation || !hasPendingConfirmation(session))
           session.confirmation = null;
-                const previousTime = Date.parse(session.history.at(-1)?.at ?? "");
-
-        const userTime = Math.max(
-          Date.now(),
-          Number.isFinite(previousTime) ? previousTime + 1 : 0,
-        );
-
-        const userMessage = {
-          role: "user",
-          content: message.trim(),
-          id: messageId ?? randomUUID(),
-          at: new Date(userTime).toISOString(),
-        };
-
-        const assistantMessage = {
-          role: "assistant",
-          content: body.reply,
-          id: randomUUID(),
-          at: new Date(userTime + 1).toISOString(),
-        };
-
-        session.history.push(userMessage, assistantMessage);
-        while (
-          session.history.length > 30 ||
-          session.history.reduce((n, x) => n + x.content.length, 0) > 24000
-        )
-          session.history.shift();
+        const assistantMessage = finishPendingChat(session, body.reply);
                 const result = {
           ...body,
           userMessage,
@@ -181,7 +178,7 @@ export function createChatHandler({
           session.responses = session.responses.slice(-50);
         }
         session.persist();
-        if (!controller.signal.aborted) return response.json(result);
+        if (!response.destroyed && !response.writableEnded) return response.json(result);
       };
       const result = await replyToMessage(
         message,
@@ -194,13 +191,15 @@ export function createChatHandler({
         hasPendingConfirmation(session),
         {
           priceMemory: session.priceMemory ?? [],
+          oilPriceMemory: session.oilPriceMemory ?? [],
           closedDayReview: session.closedDayReview ?? null,
           language: session.language,
+          previousSentRequest: previousSentRequest(session),
           deliveryStatus: deliveryStatus(session),
           hasUnsentChanges: hasUnsentChanges(session),
         },
       );
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted) throw new Error("Chat processing timed out");
       if (result.kind === "refusal")
         return answer({
           reply: messages(session.language).refusal,
@@ -212,9 +211,7 @@ export function createChatHandler({
         typeof result.text !== "string" ||
         !result.text.trim()
       )
-        return response
-          .status(502)
-          .json({ error: messages(session.language).unavailable });
+        return rejectPending(502, { error: messages(session.language).unavailable });
       if (["cs", "sk", "en", "ru", "uk", "de"].includes(result.language))
         session.language = result.language;
       response.locals.language = session.language;
@@ -241,17 +238,28 @@ export function createChatHandler({
         session.closedDayReview = review.review;
 
         if (review.blocked) {
-          return answer({
-            reply: closedDayMessage(review.info, session.language),
-            intake: next,
-            missingFields: missingIntakeFields(next, company),
-          });
-        }
+  const dateClarification = review.issue
+    ? appointmentIssueMessage(review.issue, session.language)
+    : closedDayMessage(review.info, session.language);
+
+  return answer({
+    reply: [...new Set([result.text.trim(), dateClarification])]
+      .filter(Boolean)
+      .join("\n\n"),
+    intake: next,
+    missingFields: missingIntakeFields(next, company),
+  });
+}
 
         if (review.exception && !wasAccepted) {
           result.text =
             closedDayNote(session.language) + "\n\n" + result.text;
         }
+      }
+      if (result.oilPriceRecords?.length) {
+        session.oilPriceMemory ??= [];
+        session.oilPriceMemory.push(...result.oilPriceRecords);
+        session.oilPriceMemory = session.oilPriceMemory.slice(-100);
       }
       if (result.priceQuoted === true) {
         session.priceMemory ??= [];
@@ -260,6 +268,7 @@ export function createChatHandler({
           serviceOptionId: next.serviceOptionId,
           requestedWork: next.requestedWork,
           customerParts: next.customerParts,
+          partsOverrides: structuredClone(next.partsOverrides),
           text: result.text.slice(0, 2500),
         });
         session.priceMemory = session.priceMemory.slice(-20);
@@ -299,7 +308,7 @@ export function createChatHandler({
         });
         if (submission) {
           if (submission.status !== 200)
-            return response.status(submission.status).json(submission.body);
+            return rejectPending(submission.status, submission.body);
           return answer(submission.body);
         }
         if (readyToSend(intake, company) && !wasRequestSent(session))
@@ -343,9 +352,16 @@ export function createChatHandler({
         },
         { confirm, preserveConfirmation: pending && unchanged && !confirm },
       );
+    } catch (error) {
+      const t = messages(session.language);
+      const failureText = error instanceof APIConnectionTimeoutError ? t.timeout
+        : error?.status === 429 || error instanceof APIConnectionError || error instanceof InternalServerError
+          ? t.unavailable : t.requestFailed;
+      failPendingChat(session, failureText);
+      if (!response.destroyed && !response.writableEnded) throw error;
     } finally {
+      clearTimeout(deadline);
       session.release();
-      response.off("close", onClose);
     }
   };
 }
@@ -356,34 +372,32 @@ export function createSessionHandler({
 } = {}) {
   return (request, response) => {
     const session = getSession(request, response);
-    if (!session.acquire())
-      return response
-        .status(409)
-        .json({ error: messages(session.language).busy });
+    if (!session.acquire()) {
+      if (!reset && session.pendingRequest) return response.json(chatSessionSnapshot(session));
+      return response.status(409).json({ error: messages(session.language).busy });
+    }
     try {
-      if (reset)
+      failPendingChat(session);
+      if (reset) {
+        const previous = previousSentRequest(session, session.lastDelivery) ?? previousSentRequest(session);
         Object.assign(session, {
+          restarted: true,
+          emptyExpiresAt: null,
+          previousDelivery: previous?.deliveryId ?? null,
           requestId: randomUUID(),
           revision: 0,
           confirmation: null,
           history: [],
+          pendingRequest: null,
           intake: emptyIntakeState(),
           priceMemory: [],
+          oilPriceMemory: [],
           closedDayReview: null,
           responses: [],
           lastDelivery: null,
         });
-      return response.json({
-        conversationId: session.requestId,
-        revision: session.revision,
-        language: session.language,
-        clientMessages: clientMessages(session.language),
-        history: session.history,
-        intake: session.intake,
-        confirmationToken: hasPendingConfirmation(session)
-          ? session.confirmation.token
-          : null,
-      });
+      }
+      return response.json(chatSessionSnapshot(session));
     } finally {
       session.release();
     }

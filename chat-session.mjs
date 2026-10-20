@@ -2,11 +2,23 @@ import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { emptyIntakeState } from "./intake.mjs";
 import { createRepository } from "./storage.mjs";
+import { partsFingerprint } from "./parts-supply.mjs";
 
 const SESSION_TTL = 24 * 60 * 60 * 1000;
+const EMPTY_SESSION_TTL = 5 * 60 * 1000;
+
+function sessionExpiration(session, time) {
+  const started = session.history?.some(entry => entry.role === "user") ||
+    session.lastDelivery || session.previousDelivery;
+  if (started) return time + SESSION_TTL;
+  // Empty chats have an absolute deadline; polling must not keep them alive.
+  session.emptyExpiresAt ??= Math.min(session.expiresAt ?? Infinity, time + EMPTY_SESSION_TTL);
+  return session.emptyExpiresAt;
+}
 export function draftFingerprint(intake) {
   return JSON.stringify({
     customerParts: intake.customerParts,
+    partsOverrides: partsFingerprint(intake),
     serviceId: intake.serviceId,
     serviceOptionId: intake.serviceOptionId,
     requestedWork: intake.requestedWork,
@@ -42,7 +54,9 @@ export function createChatSessionStore({
 
   if (
     !repository.allow("session-create-ip:" + request.ip, 30, 60000) ||
-    !repository.allow("session-create-global", 120, 60000)
+    !repository.allow("session-create-global", 120, 60000) ||
+    !repository.allow("session-create-ip-hour:" + request.ip, 60, 3600000) ||
+    !repository.allow("session-create-ip-day:" + request.ip, 200, SESSION_TTL)
   ) {
     throw Object.assign(new Error("Session creation limit reached"), {
       status: 429,
@@ -65,13 +79,16 @@ export function createChatSessionStore({
         responses: [],
         lastDelivery: null,
       };
-    session.expiresAt = now() + SESSION_TTL;
+    session.expiresAt = sessionExpiration(session, now());
     session.busy = Boolean(session.busy);
     if (!Object.hasOwn(session, "repository")) {
       const owner = randomUUID();
       Object.defineProperty(session, "repository", { value: repository });
       Object.defineProperty(session, "persist", {
-        value: () => repository.save(session),
+        value: () => {
+          session.expiresAt = sessionExpiration(session, now());
+          repository.save(session);
+        },
       });
       Object.defineProperty(session, "acquire", {
         value: () => {
@@ -80,7 +97,7 @@ export function createChatSessionStore({
           try {
   const current = repository.load(session.id);
   if (current) Object.assign(session, current);
-  session.expiresAt = now() + SESSION_TTL;
+  session.expiresAt = sessionExpiration(session, now());
   session.busy = true;
   active.set(session.id, session);
   return true;
@@ -96,6 +113,7 @@ export function createChatSessionStore({
         value: () => {
           session.busy = false;
           try {
+            session.expiresAt = sessionExpiration(session, now());
             repository.save(session);
           } finally {
             repository.unlock(session.id, owner);

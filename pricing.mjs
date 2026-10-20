@@ -1,3 +1,5 @@
+import { operationPartsSource } from "./parts-supply.mjs";
+
 // Service IDs match company.json. All amounts include DPH.
 export const pricingCatalog = {
   diagnostics: { method: "fixed", priceKc: 700 },
@@ -210,4 +212,22 @@ export function withPublicPrices(company) {
       options: (service.options ?? []).map((option) => decorate(service.id, option.id, option))
     }))
   };
+}
+export function getPartsPriceBook(company, state) {
+  return Object.fromEntries(
+    ["engine_oil", "air_filter", "cabin_filter", "fuel_filter", "lpg_filter"].map((id) => {
+      const own = operationPartsSource(state, id);
+      return ["oil_filters:" + id, {
+        customerParts: own,
+        quote: own === null ? null : getPriceQuote(
+          company,
+          "oil_filters",
+          id,
+          own
+            ? company.laborRates.customerPartsKcPerHour
+            : company.laborRates.standardKcPerHour,
+        ),
+      }];
+    }),
+  );
 }

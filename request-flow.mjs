@@ -3,6 +3,7 @@ import { missingIntakeFields } from "./intake.mjs";
 import { sendServiceRequest } from "./mailer.mjs";
 import { confirmationMatches, draftFingerprint, hasPendingConfirmation } from "./chat-session.mjs";
 import { messages } from "./messages.mjs";
+import { describeParts } from "./parts-supply.mjs";
 
 export function deliveryStatus(session) {
   return session?.lastDelivery
@@ -36,12 +37,13 @@ export function presentRequestStep(
   if (!showConfirmation || !readyToSend(state, company)) return reply;
   const t = messages(language),
     l = t.labels;
-  const parts =
+  const defaultParts =
     state.customerParts === true
       ? t.parts[0]
       : state.customerParts === false
         ? t.parts[1]
         : t.parts[2];
+        const parts = describeParts(state, language, defaultParts);
   return [
     reply.trim() || null,
     reply.trim() ? "" : null,
@@ -97,7 +99,8 @@ export async function handleSendConfirmation({
 }) {
   if (
     !confirmationMatches(session, confirmationToken) ||
-    !readyToSend(session.intake, company)
+    !readyToSend(session.intake, company) ||
+    !readyToSend(session.confirmation?.intake, company)
   )
     return null;
   const intake = structuredClone(session.confirmation.intake),
