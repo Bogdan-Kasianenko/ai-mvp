@@ -66,9 +66,6 @@
 
   <div class="chat-header">
   <div class="chat-header-inner">
-    <div class="chat-logo">
-      <img src="/auto-uh-logo.png.png" alt="Auto UH.cz">
-    </div>
 
     <div class="chat-header-text">
       <h2 id="chat-heading">Zeptejte se na své auto</h2>
@@ -108,7 +105,7 @@
 
   <div id="chat-quick-actions" class="chat-quick-actions" hidden>
     <button id="chat-settings" class="chat-quick-actions__button" type="button"
-      aria-label="Nastavení připravujeme" title="Nastavení připravujeme" disabled>
+      aria-label="Nastavení" data-tooltip="Nastavení" aria-expanded="false" aria-controls="chat-settings-layer" aria-haspopup="dialog">
       <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
     </button>
     <button id="chat-help" class="chat-quick-actions__button chat-quick-actions__button--help" type="button"
@@ -119,6 +116,36 @@
         <path d="M12 2V1M4.5 4.5l-.8-.8M19.5 4.5l.8-.8"/>
       </svg>
     </button>
+  </div>
+
+  <div id="chat-settings-layer" hidden>
+    <div class="chat-settings-sheet" role="dialog" aria-modal="true" aria-labelledby="chat-settings-heading" tabindex="-1">
+      <div class="chat-settings-heading-row">
+        <h2 id="chat-settings-heading">Nastavení</h2>
+        <button id="chat-settings-close" type="button" aria-label="Zavřít nastavení"><svg viewBox="0 0 30 30" aria-hidden="true"><path d="m9 9 12 12M21 9 9 21"/></svg></button>
+      </div>
+      <div id="chat-settings-options">
+        <button type="button" data-setting="expand"><span class="chat-setting-icon" aria-hidden="true"><svg viewBox="0 0 30 30" aria-hidden="true"><path d="M13 13 5 5M5 12V5h7M17 17l8 8m-7 0h7v-7"/></svg></span><span id="chat-settings-expand-label">Rozbalit chat</span><span class="chat-setting-chevron" aria-hidden="true"><svg viewBox="0 0 30 30" aria-hidden="true"><path d="m12 8 7 7-7 7"/></svg></span></button>
+        <button type="button" data-setting="download"><span class="chat-setting-icon" aria-hidden="true"><svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 5v14m-6-6 6 6 6-6M6 22v3h18v-3"/></svg></span><span>Stáhnout konverzaci</span><span class="chat-setting-chevron" aria-hidden="true"><svg viewBox="0 0 30 30" aria-hidden="true"><path d="m12 8 7 7-7 7"/></svg></span></button>
+        <button type="button" data-setting="new"><span class="chat-setting-icon" aria-hidden="true"><svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 6v18M6 15h18"/></svg></span><span>Začít nový chat</span><span class="chat-setting-chevron" aria-hidden="true"><svg viewBox="0 0 30 30" aria-hidden="true"><path d="m12 8 7 7-7 7"/></svg></span></button>
+        <button type="button" data-setting="privacy"><span class="chat-setting-icon" aria-hidden="true"><svg viewBox="0 0 30 30" aria-hidden="true"><path d="M15 13v8M15 9h.01"/><circle cx="15" cy="15" r="11"/></svg></span><span>Soukromí a osobní údaje</span><span class="chat-setting-chevron" aria-hidden="true"><svg viewBox="0 0 30 30" aria-hidden="true"><path d="m12 8 7 7-7 7"/></svg></span></button>
+      </div>
+      <div id="chat-settings-privacy" hidden>
+        <p>Vaše zprávy a údaje žádosti, včetně uvedeného kontaktu, předáváme službě OpenAI pro vytvoření odpovědi. Konverzace se ukládá v tomto prohlížeči a na serveru a vyprší po 24 hodinách nečinnosti.</p>
+        <p>Žádost odešleme servisu e-mailem až po Vašem výslovném potvrzení. Odeslání samo o sobě nepotvrzuje rezervaci termínu.</p>
+        <p>Záznam o odeslání se uchovává odděleně pro kontrolu stavu a ochranu před duplicitami. Zahájení nového chatu neodvolá již odeslanou žádost ani neodstraní tento záznam. Neuvádějte další citlivé údaje.</p>
+        <button type="button" data-setting="back">Zpět do nastavení</button>
+      </div>
+      <div id="chat-settings-confirm" hidden>
+        <p>Chcete začít nový rozhovor? Dosavadní zprávy z tohoto chatu se vymažou. Již odeslaná žádost zůstane odeslaná.</p>
+        <p>Přepis si můžete předem stáhnout do souboru.</p>
+        <div class="chat-settings-confirm-actions">
+          <button type="button" data-setting="back">Zpět</button>
+          <button type="button" data-setting="confirm-new">Ano, začít nový chat</button>
+        </div>
+      </div>
+      <p id="chat-settings-status" role="status" aria-live="polite"></p>
+    </div>
   </div>
 
   <form id="chat-form">

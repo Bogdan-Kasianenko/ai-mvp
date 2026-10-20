@@ -23,6 +23,130 @@ const questionList = document.querySelector("#question-list");
 const chatQuickActions = document.querySelector("#chat-quick-actions");
 const chatHelpButton = document.querySelector("#chat-help");
 
+const CHAT_SCROLL_KEY = "autoservice-chat-scroll-v1";
+let scrollConversationId = null;
+let restoringChatScroll = false;
+let scrollInteractionVersion = 0;
+let scrollRestoreVersion = 0;
+
+function readChatScroll(conversation = null) {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(CHAT_SCROLL_KEY) || "null");
+    if (!saved || (conversation && saved.conversationId !== conversation)) return null;
+    const value = saved.position;
+    if (!value || !Number.isFinite(value.top) || value.top < 0 ||
+        typeof value.atBottom !== "boolean") return null;
+    return value;
+  } catch { return null; }
+}
+
+function captureChatScroll() {
+  if (chatPanel.hidden || !messages.clientHeight) return null;
+  const rows = [...messages.querySelectorAll(".chat-message[data-history-id]")];
+  const anchor = rows.find(row => row.offsetTop + row.offsetHeight > messages.scrollTop);
+  return {
+    top: messages.scrollTop,
+    atBottom: messages.scrollHeight - messages.clientHeight - messages.scrollTop <= 2,
+    anchorId: anchor?.dataset.historyId ?? null,
+    offset: anchor ? anchor.offsetTop - messages.scrollTop : 0,
+  };
+}
+
+function saveChatScroll() {
+  if (!scrollConversationId || restoringChatScroll) return;
+  const position = captureChatScroll();
+  if (!position) return;
+  try {
+    sessionStorage.setItem(CHAT_SCROLL_KEY, JSON.stringify({
+      conversationId: scrollConversationId, position,
+    }));
+  } catch {}
+}
+
+function restoreChatScroll(position) {
+  if (chatPanel.hidden) return;
+  restoringChatScroll = true;
+  const rows = [...messages.querySelectorAll(".chat-message[data-history-id]")];
+  const anchor = position?.anchorId
+    ? rows.find(row => row.dataset.historyId === position.anchorId) : null;
+  const top = !position || position.atBottom
+    ? messages.scrollHeight
+    : anchor && Number.isFinite(position.offset)
+      ? anchor.offsetTop - position.offset : position.top;
+  messages.scrollTo({ top, behavior: "instant" });
+  syncUnreadCount();
+  requestAnimationFrame(() => {
+    restoringChatScroll = false;
+    saveChatScroll();
+  });
+}
+
+function restoreServerChatScroll(conversation, previousPosition) {
+  const position = previousPosition || readChatScroll(conversation);
+  scrollConversationId = conversation;
+  restoreChatScroll(position);
+  // Font loading may change the height of the same message after first layout.
+  const version = scrollInteractionVersion;
+  const restoreVersion = ++scrollRestoreVersion;
+  document.fonts?.ready.then(() => {
+    if (restoreVersion === scrollRestoreVersion && version === scrollInteractionVersion && scrollConversationId === conversation) {
+      restoreChatScroll(position);
+    }
+  });
+}
+
+messages.addEventListener("scroll", saveChatScroll, { passive: true });
+for (const event of ["wheel", "touchstart", "pointerdown", "keydown"]) {
+  messages.addEventListener(event, () => { scrollInteractionVersion++; }, { passive: true });
+}
+window.addEventListener("pagehide", saveChatScroll);
+form.addEventListener("submit", () => { scrollInteractionVersion++; });
+newMessagesButton.addEventListener("click", () => { scrollInteractionVersion++; });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") saveChatScroll();
+});
+
+
+const requestReviewTitles = new Set([
+  "Zkontrolujte prosím žádost:", "Skontrolujte prosím žiadosť:",
+  "Please review your request:", "Проверьте, пожалуйста, заявку:",
+  "Перевірте, будь ласка, заявку:", "Bitte prüfen Sie Ihre Anfrage:",
+]);
+
+function appendRequestCard(container, lines, start) {
+  if (!requestReviewTitles.has(lines[start].trim())) return start;
+  const fields = [];
+  let end = start + 1;
+  while (end < lines.length) {
+    const match = /^([^:]{1,60}):\s*(.+)$/.exec(lines[end].trim());
+    if (!match) break;
+    fields.push([match[1], match[2]]);
+    end++;
+  }
+  if (fields.length < 2) return start;
+  const card = document.createElement("section");
+  card.className = "chat-request-card";
+  const title = document.createElement("div");
+  title.className = "chat-request-card__title";
+  title.textContent = lines[start].trim().replace(/:$/, "");
+  card.append(title);
+  const details = document.createElement("dl");
+  for (const [label, value] of fields) {
+    const field = document.createElement("div");
+    field.className = "chat-request-card__field";
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = label;
+    description.textContent = value;
+    field.append(term, description);
+    details.append(field);
+  }
+  card.append(details);
+  container.append(card);
+  return end;
+}
+
+
 const CHAT_OPENED_KEY = "autoservice-chat-opened-v2";
 let isFirstVisit = false;
 try {
@@ -155,7 +279,6 @@ const CHAT_LAST_READ_KEY = "autoservice-chat-last-read-v1";
 const CHAT_RESET_KEY = "autoservice-chat-reset-v1";
 const CHAT_INTAKE_KEY = "autoservice-chat-intake-v1";
 const CHAT_HISTORY_LIFETIME = 24 * 60 * 60 * 1000;
-const MAX_SAVED_MESSAGES = 50;
 const MAX_MESSAGE_LENGTH = 20000;
 const TRUNCATION_NOTICE = "\n\n[Zpráva byla zkrácena.]";
 let chatHistory = [];
@@ -166,7 +289,89 @@ let sessionRevision = null;
 let sessionSync = null;
 let resetRequired = false;
 let sessionInitialized = false;
+let activeChatPost = false;
+let recoveredTypingRow = null;
+let recoveredRequestId = null;
+let recoveryPollTimer = null;
+let serverHistoryTailId = null;
+const PENDING_CHAT_CONTEXT_KEY = "autoservice-chat-pending-context-v1";
+
+function readUnacknowledgedMessage(data) {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(PENDING_CHAT_CONTEXT_KEY) || "null");
+    if (!saved || saved.conversationId !== data.conversationId ||
+        !isValidHistoryEntry(saved.entry) || saved.entry.role !== "user" ||
+        saved.entry.id !== sessionStorage.getItem(PENDING_CHAT_MESSAGE_KEY) ||
+        Date.now() - Date.parse(saved.entry.at) >= CHAT_HISTORY_LIFETIME ||
+        data.history.some(entry => entry.id === saved.entry.id) ||
+        data.pendingRequest?.id === saved.entry.id) return null;
+    return saved.entry;
+  } catch { return null; }
+}
+
+function clearRecoveredRequest() {
+  clearTimeout(recoveryPollTimer);
+  recoveryPollTimer = null;
+  recoveredTypingRow?.remove();
+  recoveredTypingRow = null;
+  recoveredRequestId = null;
+}
+
+function scheduleRecoveryPoll() {
+  clearTimeout(recoveryPollTimer);
+  recoveryPollTimer = setTimeout(async () => {
+    recoveryPollTimer = null;
+    try { await syncServerSession(); }
+    catch {
+      // Reconnect by reading status; never repeat the original POST.
+      if (recoveredRequestId) scheduleRecoveryPoll();
+    }
+  }, document.visibilityState === "hidden" ? 3000 : 1000);
+}
+
+function shouldAnimateRecoveredSend(data) {
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(PENDING_CHAT_CONTEXT_KEY) || "null");
+    return saved?.conversationId === data.conversationId &&
+      saved?.entry?.id === data.pendingRequest?.id && saved?.animateSend === true;
+  } catch { return false; }
+}
+
+function recoverPendingRequest(data) {
+  if (activeChatPost) return;
+  const pending = data.pendingRequest;
+  if (pending) {
+    recoveredRequestId = pending.id;
+    isAiTyping = true;
+    sendButton.disabled = true;
+    sendButton.classList.toggle("is-sending", shouldAnimateRecoveredSend(data));
+    if (!recoveredTypingRow?.isConnected) recoveredTypingRow = showTypingMessage();
+    updateLauncherStatus();
+    updateSuggestions();
+    scheduleRecoveryPoll();
+    return;
+  }
+  const wasRecovering = Boolean(recoveredRequestId);
+  clearRecoveredRequest();
+  try {
+    const pendingId = sessionStorage.getItem(PENDING_CHAT_MESSAGE_KEY);
+    if (pendingId && data.history.some(entry => entry.id === pendingId)) {
+      sessionStorage.removeItem(PENDING_CHAT_MESSAGE_KEY);
+      sessionStorage.removeItem(PENDING_CHAT_CONTEXT_KEY);
+    }
+  } catch {}
+  if (wasRecovering) {
+    isAiTyping = false;
+    sendButton.disabled = false;
+    sendButton.classList.remove("is-sending");
+    updateLauncherStatus();
+    updateSuggestions();
+    if (chatUiState.open && !chatPanel.hidden) input.focus({ preventScroll: true });
+  }
+}
+
 let welcomeTask = null;
+let chatRestartGreeting = null;
 let uiMessages = {
   invalidMessage: 'Zadejte zprávu o délce 1 až 1000 znaků.',
   timeout: 'Odpověď trvá příliš dlouho. Zkuste to prosím znovu.',
@@ -336,9 +541,7 @@ function readStoredHistory() {
     // Если хранилище недоступно, остаётся история текущей вкладки.
   }
 
-  return [...entries.values()]
-    .sort(compareHistoryEntries)
-    .slice(-MAX_SAVED_MESSAGES);
+  return [...entries.values()].sort(compareHistoryEntries);
 }
 
 function migrateOldHistory() {
@@ -373,7 +576,6 @@ function pruneStoredHistory() {
       if (key?.startsWith(CHAT_MESSAGE_PREFIX)) keys.push(key);
     }
 
-    if (keys.length <= MAX_SAVED_MESSAGES) return;
     const newest = new Set(
       readStoredHistory().map((entry) => CHAT_MESSAGE_PREFIX + entry.id),
     );
@@ -386,7 +588,15 @@ function pruneStoredHistory() {
 }
 
 function resetChatLocally({ resetServer = true } = {}) {
+  clearRecoveredRequest();
+  activeChatPost = false;
+  serverHistoryTailId = null;
+  scrollConversationId = null;
+  scrollRestoreVersion++;
+  try { sessionStorage.removeItem(CHAT_SCROLL_KEY); } catch {}
+
   confirmationToken = null;
+  chatRestartGreeting = null;
   conversationId = null;
   resetRequired = resetServer;
   sessionInitialized = false;
@@ -405,6 +615,7 @@ function resetChatLocally({ resetServer = true } = {}) {
   sendButton.classList.remove("is-sending");
   try {
     sessionStorage.removeItem(PENDING_CHAT_MESSAGE_KEY);
+    sessionStorage.removeItem(PENDING_CHAT_CONTEXT_KEY);
     localStorage.removeItem(CHAT_INTAKE_KEY);
   } catch {
     // Чат работает и без хранилища вкладки.
@@ -476,7 +687,6 @@ function rememberMessage(
 
   chatHistory.push(entry);
   chatHistory.sort(compareHistoryEntries);
-  chatHistory = chatHistory.slice(-MAX_SAVED_MESSAGES);
 
   try {
     localStorage.setItem(CHAT_MESSAGE_PREFIX + id, JSON.stringify(entry));
@@ -537,26 +747,6 @@ scheduleHistoryExpiry();
 lastReadMarker = readStoredLastReadMarker();
 updateUnreadCount();
 
-try {
-  const pendingId = sessionStorage.getItem(PENDING_CHAT_MESSAGE_KEY);
-  if (pendingId) {
-    if (
-      chatHistory.some(
-        (entry) => entry.id === pendingId && entry.role === "user",
-      )
-    ) {
-      rememberMessage(
-        "error",
-        uiMessages.interrupted,
-        new Date().toISOString(),
-        `interrupted-${pendingId}`,
-      );
-    }
-    sessionStorage.removeItem(PENDING_CHAT_MESSAGE_KEY);
-  }
-} catch {
-  // Nedostupné úložiště nesmí zabránit načtení chatu.
-}
 
 window.addEventListener("storage", (event) => {
   if (event.key === CHAT_RESET_KEY) {
@@ -606,12 +796,18 @@ async function syncServerSession() {
         data.error || uiMessages.restoreFailed,
       );
     if (reset) resetRequired = false;
+    chatRestartGreeting = typeof data.restartGreeting === "string" ? data.restartGreeting : null;
         if (
       !sessionInitialized ||
+      serverHistoryTailId !== (data.history.at(-1)?.id ?? null) ||
       conversationId !== data.conversationId ||
       sessionRevision !== data.revision ||
       confirmationToken !== (data.confirmationToken ?? null)
     ) {
+      const previousScroll = sessionInitialized && conversationId === data.conversationId
+        ? captureChatScroll() : readChatScroll(data.conversationId);
+      restoringChatScroll = true;
+      const unacknowledged = readUnacknowledgedMessage(data);
       // Restore the server-owned conversation; local history is display-only.
       chatHistory = [];
       messages.replaceChildren();
@@ -624,11 +820,11 @@ async function syncServerSession() {
         for (const key of keys) localStorage.removeItem(key);
       } catch {}
             // Восстанавливаем приветствие перед существующей перепиской.
-      if (data.history.length > 0) {
+      if (data.history.length > 0 || unacknowledged) {
         const welcomeText =
-          "Dobrý den! 👋 S čím vám mohu pomoci? Napište mi, co se děje s vaším autem, nebo se zeptejte na služby, ceny či možnosti online objednání do servisu.";
+          chatRestartGreeting ?? "Dobrý den! 👋 S čím vám mohu pomoci? Napište mi, co se děje s vaším autem, nebo se zeptejte na služby, ceny či možnosti online objednání do servisu.";
 
-        const firstTime = Date.parse(data.history[0].at);
+        const firstTime = Date.parse(data.history[0]?.at ?? unacknowledged?.at);
         const welcomeAt = new Date(
           Number.isFinite(firstTime) ? firstTime - 1 : Date.now() - 1,
         ).toISOString();
@@ -665,25 +861,33 @@ async function syncServerSession() {
         );
         placeHistoryRow(row, saved);
       }
+      if (unacknowledged) {
+        const saved = rememberMessage("user", unacknowledged.content, unacknowledged.at, unacknowledged.id);
+        placeHistoryRow(showMessage("Vy", saved.content, saved.at, true), saved);
+        const failed = rememberMessage("error", uiMessages.connectionFailed,
+          new Date(Date.parse(saved.at) + 1).toISOString(), "not-received-" + saved.id);
+        placeHistoryRow(showMessage("AI asistent", failed.content, failed.at, true), failed);
+      }
       if (!chatHistory.length && chatUiState.open && !chatPanel.hidden)
         showWelcomeMessage();
       const firstRestore = !sessionInitialized;
 sessionInitialized = true;
 
 requestAnimationFrame(() => {
-  if (!chatUiState.open || chatPanel.hidden) return;
+  scrollConversationId = data.conversationId;
+  if (!chatUiState.open || chatPanel.hidden) {
+    restoringChatScroll = false;
+    return;
+  }
 
-  messages.scrollTo({
-    top: messages.scrollHeight,
-    behavior: "instant",
-  });
-  syncUnreadCount();
+  restoreServerChatScroll(data.conversationId, previousScroll);
 
   if (!firstRestore || chatMotionReduced.matches) return;
 
   const recentRows = [
     ...messages.querySelectorAll(".chat-message"),
-  ].slice(-5);
+  ].filter(row => row.offsetTop + row.offsetHeight > messages.scrollTop &&
+    row.offsetTop < messages.scrollTop + messages.clientHeight).slice(0, 5);
 
   recentRows.forEach((row, index) => {
     row.animate(
@@ -705,6 +909,8 @@ requestAnimationFrame(() => {
     sessionRevision = data.revision;
     confirmationToken = data.confirmationToken ?? null;
     intakeState = data.intake;
+    serverHistoryTailId = data.history.at(-1)?.id ?? null;
+    recoverPendingRequest(data);
     return data;
   })();
   try {
@@ -1032,6 +1238,11 @@ function renderAssistantText(container, text) {
   let index = 0;
 
   while (index < lines.length) {
+    const requestEnd = appendRequestCard(container, lines, index);
+    if (requestEnd > index) {
+      index = requestEnd;
+      continue;
+    }
     if (
       lines[index].trim().startsWith("|") &&
       isSeparator(lines[index + 1])
@@ -1294,7 +1505,7 @@ function showWelcomeMessage() {
       }
 
       const welcomeText =
-        "Dobrý den! 👋 S čím vám mohu pomoci? Napište mi, co se děje s vaším autem, nebo se zeptejte na služby, ceny či možnosti online objednání do servisu.";
+        chatRestartGreeting ?? "Dobrý den! 👋 S čím vám mohu pomoci? Napište mi, co se děje s vaším autem, nebo se zeptejte na služby, ceny či možnosti online objednání do servisu.";
 
       isAiTyping = true;
       startedTyping = true;
@@ -1341,8 +1552,8 @@ function showWelcomeMessage() {
       welcomeTask = null;
 
       if (generation === chatGeneration) {
-        if (startedTyping) isAiTyping = false;
-        sendButton.disabled = false;
+        if (startedTyping && !recoveredRequestId && !activeChatPost) isAiTyping = false;
+        sendButton.disabled = Boolean(recoveredRequestId || activeChatPost);
         updateLauncherStatus();
         updateSuggestions();
       }
@@ -1390,6 +1601,8 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  if (recoveredRequestId) return;
+
   const stateChanged =
     displayedState.conversationId !== conversationId ||
     displayedState.revision !== sessionRevision ||
@@ -1405,6 +1618,7 @@ form.addEventListener("submit", async (event) => {
   }
 
   const generation = chatGeneration;
+  activeChatPost = true;
   sendButton.disabled = true;
   isAiTyping = true;
   updateLauncherStatus();
@@ -1418,23 +1632,16 @@ form.addEventListener("submit", async (event) => {
   placeHistoryRow(userRow, userEntry);
   try {
     sessionStorage.setItem(PENDING_CHAT_MESSAGE_KEY, userEntry.id);
+    sessionStorage.setItem(PENDING_CHAT_CONTEXT_KEY, JSON.stringify({ conversationId, entry: userEntry, animateSend: sendButton.classList.contains("is-sending") }));
   } catch {
     // Bez úložiště karta stále může dokončit aktuální požadavek.
   }
   input.value = "";
   resizeMessageInput();
 
-  const typingRowPromise = new Promise((resolve) => {
-    setTimeout(() => {
-      if (generation !== chatGeneration) {
-        resolve({ row: null, shownAt: performance.now() });
-        return;
-      }
-      resolve({
-        row: showTypingMessage(),
-        shownAt: performance.now(),
-      });
-    }, 650);
+  const typingRowPromise = Promise.resolve({
+    row: showTypingMessage(),
+    shownAt: performance.now(),
   });
 
   try {
@@ -1604,6 +1811,7 @@ form.addEventListener("submit", async (event) => {
     try {
       if (sessionStorage.getItem(PENDING_CHAT_MESSAGE_KEY) === userEntry.id) {
         sessionStorage.removeItem(PENDING_CHAT_MESSAGE_KEY);
+        sessionStorage.removeItem(PENDING_CHAT_CONTEXT_KEY);
       }
     } catch {
       // Odpověď už je uložená v historii.
@@ -1611,6 +1819,7 @@ form.addEventListener("submit", async (event) => {
     placeHistoryRow(row, replyEntry);
   } finally {
     if (generation === chatGeneration) {
+      activeChatPost = false;
       isAiTyping = false;
       updateLauncherStatus();
       sendButton.disabled = false;
@@ -1677,7 +1886,7 @@ if (chatUiState.open) {
   showWelcomeMessage();
   scheduleHelpHint();
   requestAnimationFrame(() => {
-    messages.scrollTop = messages.scrollHeight;
+    restoreChatScroll(readChatScroll());
   });
 } else if (isFirstVisit) {
   setTimeout(() => {
@@ -1717,3 +1926,151 @@ if (new URLSearchParams(window.location.search).has("glass-preview")) {
 }
 
 void syncServerSession().catch(() => {});
+
+
+// Settings stay local; they never submit a message to the assistant.
+(() => {
+  const trigger = document.querySelector("#chat-settings");
+  const layer = document.querySelector("#chat-settings-layer");
+  const sheet = layer.querySelector(".chat-settings-sheet");
+  const heading = document.querySelector("#chat-settings-heading");
+  const status = document.querySelector("#chat-settings-status");
+  const views = ["options", "privacy", "confirm"].map(name => document.querySelector("#chat-settings-" + name));
+  let open = false, closing = false, resetting = false;
+  const inertBefore = new Map();
+  let settingsMotion = [];
+  let sheetMotion = null;
+  const resize = () => layer.style.setProperty("--chat-settings-composer-height", form.getBoundingClientRect().height + "px");
+  new ResizeObserver(resize).observe(form);
+
+  function view(name) {
+    for (const panel of views) panel.hidden = panel.id !== "chat-settings-" + name;
+    heading.textContent = name === "privacy" ? "Soukromí a osobní údaje" : name === "confirm" ? "Nový rozhovor" : "Nastavení";
+    status.textContent = "";
+    document.querySelector("#chat-settings-expand-label").textContent = chatPanel.classList.contains("is-expanded") ? "Zmenšit chat" : "Rozbalit chat";
+    document.querySelector('[data-setting="expand"] .chat-setting-icon path').setAttribute("d", chatExpand.querySelector("path").getAttribute("d"));
+    sheet.scrollTop = 0;
+  }
+  async function closeSettings(restoreFocus = true) {
+    if (!open || closing || resetting) return;
+    closing = true;
+    if (!chatMotionReduced.matches && !chatPanel.hidden) {
+      // Fade the dimming out while the sheet slides beneath the clipped edge.
+      for (const animation of settingsMotion) animation.reverse();
+      const from = getComputedStyle(sheet).transform;
+      sheetMotion?.cancel();
+      sheetMotion = sheet.animate([
+        { transform: from === "none" ? "translateY(0)" : from },
+        { transform: "translateY(calc(100% + 40px))" },
+      ], { duration: 380, easing: "cubic-bezier(.4, 0, .6, 1)", fill: "forwards" });
+      await Promise.allSettled([sheetMotion.finished, ...settingsMotion.map(animation => animation.finished)]);
+    }
+    layer.hidden = true;
+    sheetMotion?.cancel();
+    sheetMotion = null;
+    for (const animation of settingsMotion) animation.cancel();
+    settingsMotion = [];
+    layer.style.removeProperty("background-color");
+    open = false;
+    closing = false;
+    chatPanel.classList.remove("settings-open");
+    trigger.setAttribute("aria-expanded", "false");
+    for (const [element, inert] of inertBefore) element.inert = inert;
+    inertBefore.clear();
+    if (restoreFocus && !chatPanel.hidden) trigger.focus({ preventScroll: true });
+  }
+  trigger.addEventListener("click", () => {
+    if (open) { void closeSettings(); return; }
+    setQuestionListOpen(false);
+    hideHelpHint();
+    view("options");
+    resize();
+    layer.hidden = false;
+    open = true;
+    trigger.setAttribute("aria-expanded", "true");
+    chatPanel.classList.add("settings-open");
+    const motionOptions = { duration: 380, easing: "ease-in-out", fill: "forwards" };
+    settingsMotion = [];
+    if (!chatMotionReduced.matches) {
+      settingsMotion.push(layer.animate([
+        { backgroundColor: "rgba(26, 49, 51, 0)" },
+        { backgroundColor: "rgba(26, 49, 51, .16)" },
+      ], motionOptions));
+    } else layer.style.backgroundColor = "rgba(26, 49, 51, .16)";
+    for (const child of chatPanel.children) {
+      if (child === layer) continue;
+      inertBefore.set(child, child.inert);
+      child.inert = true;
+      if (!chatMotionReduced.matches) {
+        const opacity = getComputedStyle(child).opacity;
+        settingsMotion.push(child.animate([{ opacity }, { opacity: String(Number(opacity) * .45) }], motionOptions));
+      }
+    }
+    sheet.focus({ preventScroll: true });
+    if (!chatMotionReduced.matches) sheetMotion = sheet.animate([
+      { transform: "translateY(calc(100% + 40px))" },
+      { transform: "translateY(0)" },
+    ], { duration: 380, easing: "cubic-bezier(.22, 1, .36, 1)", fill: "forwards" });
+  });
+  document.querySelector("#chat-settings-close").addEventListener("click", () => void closeSettings());
+  layer.addEventListener("click", event => { if (event.target === layer) void closeSettings(); });
+  layer.addEventListener("keydown", event => {
+    if (event.key === "Escape") { event.preventDefault(); void closeSettings(); }
+    if (event.key !== "Tab") return;
+    const buttons = [...sheet.querySelectorAll("button:not(:disabled)")].filter(button => button.getClientRects().length);
+    const first = buttons[0], last = buttons.at(-1);
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === sheet)) { event.preventDefault(); last?.focus(); }
+    else if (!event.shiftKey && (document.activeElement === last || document.activeElement === sheet)) { event.preventDefault(); first?.focus(); }
+  });
+  sheet.addEventListener("click", async event => {
+    const button = event.target.closest("[data-setting]");
+    if (!button || resetting || closing) return;
+    const action = button.dataset.setting;
+    if (action === "back") { view("options"); sheet.focus(); }
+    if (action === "expand") {
+      const expanded = !chatPanel.classList.contains("is-expanded");
+      setChatExpanded(expanded);
+      chatUiState.expanded = expanded;
+      saveChatExpandedState();
+      view("options");
+    }
+    if (action === "privacy") { view("privacy"); sheet.focus(); }
+    if (action === "new") {
+      if (isAiTyping || activeChatPost || recoveredRequestId || sessionSync) { status.textContent = "Nejprve prosím počkejte na dokončení aktuálního požadavku."; return; }
+      view("confirm"); sheet.focus();
+    }
+    if (action === "download") {
+      const text = chatHistory.map(entry => `${entry.role === "user" ? "Vy" : "AI asistent"} · ${new Date(entry.at).toLocaleString("cs-CZ")}\n${entry.content}`).join("\n\n");
+      if (!text) { status.textContent = "Konverzace zatím neobsahuje žádné zprávy."; return; }
+      const url = URL.createObjectURL(new Blob(["\uFEFF" + text], { type: "text/plain;charset=utf-8" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `Caro-konverzace-${new Date().toISOString().slice(0, 10)}.txt`;
+      document.body.append(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      status.textContent = "Přepis konverzace je připravený ke stažení.";
+    }
+    if (action === "confirm-new") {
+      if (isAiTyping || activeChatPost || recoveredRequestId || sessionSync) { status.textContent = "Nejprve prosím počkejte na dokončení aktuálního požadavku."; return; }
+      resetting = true; button.disabled = true;
+      status.textContent = "Připravuji nový rozhovor…";
+      try {
+        const response = await fetch("/api/session/reset", { method: "POST", signal: AbortSignal.timeout(10000) });
+        if (!response.ok) throw new Error("Reset rejected");
+        // Only clear the browser after the server has accepted the reset.
+        try {
+          for (const key of Object.keys(localStorage)) if (key.startsWith(CHAT_MESSAGE_PREFIX)) localStorage.removeItem(key);
+          for (const key of [CHAT_HISTORY_KEY, CHAT_LAST_READ_KEY, CHAT_OPENED_KEY, CHAT_INTAKE_KEY]) localStorage.removeItem(key);
+          localStorage.setItem(CHAT_RESET_KEY, makeMessageId());
+        } catch { /* The server reset still works without browser storage. */ }
+        resetChatLocally({ resetServer: false });
+        await syncServerSession();
+        showWelcomeMessage();
+        resetting = false;
+        await closeSettings();
+      } catch {
+        status.textContent = "Nový rozhovor se nepodařilo načíst. Zkuste to prosím znovu.";
+      } finally { resetting = false; button.disabled = false; }
+    }
+  });
+})();
