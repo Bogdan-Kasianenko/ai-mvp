@@ -10,7 +10,7 @@ const company = JSON.parse(readFileSync(new URL("./company.json", import.meta.ur
 function complete() {
   const state = emptyIntakeState();
   Object.assign(state, {
-    intent: "service_request", serviceId: "oil_filters", serviceOptionId: "engine_oil",
+    intent: "service_request", selectedOperations: ["oil_filters:engine_oil"],  serviceId: "oil_filters", serviceOptionId: "engine_oil",
     requestedWork: "Výměna motorového oleje a olejového filtru", customerParts: false,
     oilFilterScopeReviewed: true, additionalServicesReviewed: true, preferredTime: "2026-10-26",
   });
@@ -55,7 +55,7 @@ test("a completed Sunday draft receives a warning without a send token or mail c
   const session = {
     intake: state, revision: 0, history: [], language: "cs", lastDelivery: null,
     requestId: "fixture-contract", confirmation: null,
-    repository: { activeCount: () => 0, allow: () => true },
+    repository: { activeCount: () => 0, allow: () => true, allowMany: () => true },
     acquire: () => true, release() {}, persist() {},
   };
   let sends = 0;

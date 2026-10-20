@@ -7,7 +7,7 @@ import {describeParts} from './parts-supply.mjs';
 const company=JSON.parse(readFileSync(new URL('./company.json',import.meta.url),'utf8'));
 function full(overrides={engineOil:true,oilFilter:true},work='Výměna motorového oleje a olejového filtru',option='engine_oil') {
  const state=emptyIntakeState();
- Object.assign(state,{intent:'service_request',serviceId:'oil_filters',serviceOptionId:option,requestedWork:work,customerParts:null,oilFilterScopeReviewed:true,additionalServicesReviewed:true,preferredTime:'2099-10-26'});
+ Object.assign(state,{intent:'service_request',selectedOperations:['oil_filters:'+option],serviceId:'oil_filters',serviceOptionId:option,requestedWork:work,customerParts:null,oilFilterScopeReviewed:true,additionalServicesReviewed:true,preferredTime:'2099-10-26'});
  Object.assign(state.partsOverrides,overrides);
  Object.assign(state.vehicle,{brand:'Test',model:'Test',year:'2018',engine:'1.4 l',fuel:'benzín'});
  Object.assign(state.customer,{name:'Test',email:'test@example.com'});
@@ -29,24 +29,27 @@ for(const [option,key,name] of [['air_filter','airFilter','Výměna vzduchového
 });
 test('an added air filter blocks until its supplier is known',()=>{
  const state=full({engineOil:true,oilFilter:true},'Výměna oleje a olejového i vzduchového filtru');
+ state.selectedOperations.push('oil_filters:air_filter');
  assert.equal(readyToSend(state,company),false);
  state.partsOverrides.airFilter=false;assert.equal(readyToSend(state,company),true);
 });
 test('all filters requires the standard scope and includes explicitly selected fuel/LPG filters',()=>{
  const state=full({engineOil:true,oilFilter:true,airFilter:false,cabinFilter:false},'Výměna oleje a všech filtrů');
+ state.selectedOperations=['engine_oil','air_filter','cabin_filter'].map(id=>'oil_filters:'+id);
+ Object.assign(state.partsOverrides,{airFilter:false,cabinFilter:false});
  assert.equal(readyToSend(state,company),true);
- state.requestedWork+=' a LPG filtru';assert.equal(readyToSend(state,company),false);
+ state.requestedWork+=' a LPG filtru';state.selectedOperations.push('oil_filters:lpg_filter');assert.equal(readyToSend(state,company),false);
  state.partsOverrides.lpgFilter=false;assert.equal(readyToSend(state,company),true);
- state.requestedWork+=' a palivového filtru';assert.equal(readyToSend(state,company),false);
+ state.requestedWork+=' a palivového filtru';state.selectedOperations.push('oil_filters:fuel_filter');assert.equal(readyToSend(state,company),false);
  state.partsOverrides.fuelFilter=true;assert.equal(readyToSend(state,company),true);
 });
 test('unmapped extra work cannot be covered by oil-specific overrides',()=>{
- const state=full({engineOil:true,oilFilter:true},'Výměna oleje a filtru a brzdových destiček');
+ const state=full({engineOil:true,oilFilter:true},'Výměna oleje a filtru a brzdových destiček');state.selectedOperations.push('brakes:brake_pads');
  assert.equal(readyToSend(state,company),false);
  state.customerParts=false;assert.equal(readyToSend(state,company),true);
 });
 test('oil overrides do not satisfy unrelated material jobs',()=>{
- const state=full();state.serviceId='timing_service';state.serviceOptionId=null;state.requestedWork='Výměna rozvodů';
+ const state=full();state.selectedOperations=['timing_service:'];state.serviceId='timing_service';state.serviceOptionId=null;state.requestedWork='Výměna rozvodů';
  assert.ok(missingIntakeFields(state,company).includes('customerParts'));
 });
 test('known service oil supply still requires engine details; own oil and filter do not',()=>{

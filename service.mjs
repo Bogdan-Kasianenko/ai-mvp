@@ -4,6 +4,7 @@ import { normalizePartsOverrides } from "./parts-supply.mjs";
 import {
   intakeResponseSchema,
   missingIntakeFields,
+  normalizeIntakeState,
   validateModelResponse,
 } from "./intake.mjs";
 import { getPriceBook, getPartsPriceBook } from "./pricing.mjs";
@@ -136,6 +137,7 @@ const contactChecks = {
       parsed.intake.customerParts = intake.customerParts;
       parsed.intake.partsOverrides = normalizePartsOverrides(intake.partsOverrides, intake.customerParts);
     }
+     parsed.intake = normalizeIntakeState(parsed.intake, company);
     const oilPrices = renderOilQuotes(company, parsed.intake, parsed.oilPriceRequests,
       parsed.oilPriceMode, serverContext.oilPriceMemory, parsed.language);
     if (parsed.oilPriceMode !== "none" && /\d[\d\s.,]*\s*(?:Kč|CZK)/i.test(parsed.reply + " " + parsed.oilPriceFollowUp)) {

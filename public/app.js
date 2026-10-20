@@ -718,7 +718,6 @@ function refreshChatHistory() {
 
   chatHistory.push(...newEntries);
   chatHistory.sort(compareHistoryEntries);
-  chatHistory = chatHistory.slice(-MAX_SAVED_MESSAGES);
   if (
     newEntries.length &&
     wasNearBottom &&
@@ -1585,10 +1584,18 @@ form.addEventListener("submit", async (event) => {
   helpHintDismissed = true;
   hideHelpHint();
 
-    const displayedState = {
+      const displayedState = {
     conversationId,
     revision: sessionRevision,
     confirmationToken,
+    generation: chatGeneration,
+    empty:
+      serverHistoryTailId === null &&
+      (sessionRevision === null || sessionRevision === 0) &&
+      confirmationToken === null &&
+      !chatHistory.some(entry =>
+        ["user", "assistant"].includes(entry.role)
+      ),
   };
 
   sendButton.disabled = true;
@@ -1603,12 +1610,24 @@ form.addEventListener("submit", async (event) => {
 
   if (recoveredRequestId) return;
 
-  const stateChanged =
+    const stateChanged =
+    displayedState.generation !== chatGeneration ||
     displayedState.conversationId !== conversationId ||
     displayedState.revision !== sessionRevision ||
     displayedState.confirmationToken !== confirmationToken;
 
-  if (stateChanged) {
+    const emptySessionRenewed =
+    displayedState.conversationId !== conversationId &&
+    displayedState.empty &&
+    displayedState.generation === chatGeneration &&
+    serverHistoryTailId === null &&
+    sessionRevision === 0 &&
+    confirmationToken === null &&
+    !chatHistory.some(entry =>
+      ["user", "assistant"].includes(entry.role)
+    );
+
+  if (stateChanged && !emptySessionRenewed) {
     sendButton.disabled = false;
     sendButton.classList.remove("is-sending");
     updateSuggestions();

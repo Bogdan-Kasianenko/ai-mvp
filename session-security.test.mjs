@@ -18,7 +18,7 @@ const company = JSON.parse(
 function fullIntake() {
   const state = emptyIntakeState();
   Object.assign(state, {
-    intent: "service_request",
+    intent: "service_request", selectedOperations: ["oil_filters:engine_oil"],
     customerParts: true,
     additionalServicesReviewed: true,
     requestedWork: "Výměna oleje a olejového filtru",

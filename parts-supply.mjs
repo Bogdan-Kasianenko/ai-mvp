@@ -6,10 +6,22 @@ export function emptyPartsOverrides() {
   return Object.fromEntries(partKeys.map((key) => [key, null]));
 }
 
-export function normalizePartsOverrides(value, base) {
-  return Object.fromEntries(partKeys.map((key) => {
-    const choice = value?.[key];
-    return [key, typeof choice === "boolean" && choice !== base ? choice : null];
+export function normalizePartsOverrides(
+  value,
+  base,
+  selectedOperations = null,
+) {
+  const selected = selectedPartKeys({ selectedOperations });
+
+  return Object.fromEntries(partKeys.map(key => {
+    const choice = selected && !selected.includes(key)
+      ? null
+      : value?.[key];
+
+    return [
+      key,
+      typeof choice === "boolean" && choice !== base ? choice : null,
+    ];
   }));
 }
 
@@ -32,15 +44,29 @@ export function operationPartsSource(state, optionId) {
 }
 
 export function needsOilEngine(state) {
-  return state.serviceId === "oil_filters" &&
-    ["engine_oil", null].includes(state.serviceOptionId) &&
-    ["engineOil", "oilFilter"].some((key) => partSource(state, key) === false);
+  const oilSelected = Array.isArray(state.selectedOperations)
+    ? state.selectedOperations.includes("oil_filters:engine_oil")
+    : state.serviceId === "oil_filters" &&
+      ["engine_oil", null].includes(state.serviceOptionId);
+
+  return oilSelected &&
+    ["engineOil", "oilFilter"].some(
+      key => partSource(state, key) === false
+    );
 }
 
 export function partsFingerprint(state) {
-  const overrides = normalizePartsOverrides(state.partsOverrides, state.customerParts);
-  return Object.values(overrides).some((value) => typeof value === "boolean")
-    ? overrides : undefined;
+  const overrides = normalizePartsOverrides(
+    state.partsOverrides,
+    state.customerParts,
+    state.selectedOperations,
+  );
+
+  return Object.values(overrides).some(
+    value => typeof value === "boolean"
+  )
+    ? overrides
+    : undefined;
 }
 
 const wording = {
@@ -55,54 +81,126 @@ const wording = {
 export function describeParts(state, language, fallback) {
   const overrides = partsFingerprint(state);
   if (!overrides) return fallback;
+
   const words = wording[language] ?? wording.en;
-  const selected = state.customerParts == null ? selectedPartKeys(state) : null;
+  const selected = selectedPartKeys(state);
+
   const labels = partKeys.flatMap((key, index) => {
     if (selected && !selected.includes(key)) return [];
+
     const choice = overrides[key];
+
     return typeof choice === "boolean"
-      ? [`${words.names[index]}: ${choice ? words.customer : words.service}`] : [];
+      ? [
+          `${words.names[index]}: ${
+            choice ? words.customer : words.service
+          }`,
+        ]
+      : [];
   });
-  if (!selected || selected.some(key => partSource(state, key) === null))
-    labels.push(`${words.other}: ${
-    state.customerParts === true ? words.customer :
-      state.customerParts === false ? words.service : words.unknown
-  }`);
+
+  if (
+    !selected ||
+    state.selectedOperations.some(id => !materialsFor(id)) ||
+    selected.some(key => typeof overrides[key] !== "boolean")
+  ) {
+    labels.push(
+      `${words.other}: ${
+        state.customerParts === true
+          ? words.customer
+          : state.customerParts === false
+            ? words.service
+            : words.unknown
+      }`
+    );
+  }
+
   return labels.join("; ");
 }
 
-// Resolve only a recognizable oil/filter scope. Unknown additional work keeps
-// the general supplier question mandatory instead of guessing its materials.
-export function selectedPartKeys(state) {
-  if (state.serviceId !== "oil_filters") return null;
-  const byOption = {
-    engine_oil: ["engineOil", "oilFilter"],
-    air_filter: ["airFilter"], cabin_filter: ["cabinFilter"],
-    fuel_filter: ["fuelFilter"], lpg_filter: ["lpgFilter"],
-  };
-  const required = new Set(byOption[state.serviceOptionId] ?? []);
-  const text = String(state.requestedWork ?? "").normalize("NFD")
-    .replace(/\p{M}/gu, "").toLowerCase();
-  const words = text.match(/[\p{L}\p{N}]+/gu) ?? [];
-  const knownWord = /^(?:vymen\p{L}*|motor\p{L}*|olej\p{L}*|filtr\p{L}*|vzduch\p{L}*|kabin\p{L}*|pyl\p{L}*|paliv\p{L}*|lpg|vsech\p{L}*|vsetk\p{L}*|a|i|s|se|za|pro|the|and|with|of|engine|oil|filter|filters|air|cabin|pollen|fuel|replacement|replace|change|all|замен\p{L}*|мотор\p{L}*|масл\p{L}*|фильтр\p{L}*|воздуш\p{L}*|салон\p{L}*|топлив\p{L}*|всех|все|и|заміна|заміни|олив\p{L}*|фільтр\p{L}*|повітр\p{L}*|палив\p{L}*|усіх|всіх|та|luft\p{L}*|innenraum\p{L}*|kraftstoff\p{L}*|ol\p{L}*|wechsel|austausch|und|des|der|alle\p{L}*)$/u;
-  if (words.some(word => !knownWord.test(word))) return null;
-  if (/olej|\boil\b|масл|олив|\bol\p{L}*/u.test(text)) {
-    required.add("engineOil"); required.add("oilFilter");
-  }
-  if (/vzduch|\bair\b|воздуш|повітр|luft/u.test(text)) required.add("airFilter");
-  if (/kabin|pyl|\bcabin\b|pollen|салон|innenraum/u.test(text)) required.add("cabinFilter");
-  if (/paliv|\bfuel\b|топлив|палив|kraftstoff/u.test(text)) required.add("fuelFilter");
-  if (/\blpg\b/u.test(text)) required.add("lpgFilter");
-  if (/vsech|vsetk|\ball\b|всех|все|усіх|всіх|\balle\p{L}*/u.test(text)) {
-    required.add("engineOil"); required.add("oilFilter");
-    required.add("airFilter"); required.add("cabinFilter");
-  }
-  return required.size ? [...required] : null;
+const operationMaterials = {
+  "oil_filters:engine_oil": ["engineOil", "oilFilter"],
+  "oil_filters:air_filter": ["airFilter"],
+  "oil_filters:cabin_filter": ["cabinFilter"],
+  "oil_filters:fuel_filter": ["fuelFilter"],
+  "oil_filters:lpg_filter": ["lpgFilter"],
+};
+
+const materialsFor = id =>
+  Object.hasOwn(operationMaterials, id)
+    ? operationMaterials[id]
+    : null;
+
+export function normalizeSelectedOperations(value, company) {
+  if (!Array.isArray(value)) return null;
+
+  const allowed = new Set(
+    company.services.flatMap(service =>
+      service.options?.length
+        ? service.options.map(option => `${service.id}:${option.id}`)
+        : [`${service.id}:`]
+    )
+  );
+
+  return [
+    ...new Set(
+      value.slice(0, 30).map(id =>
+        typeof id === "string" && allowed.has(id) ? id : "other"
+      )
+    ),
+  ];
 }
 
-export function hasUnspecifiedPartsSupply(state) {
-  const keys = selectedPartKeys(state);
-  return keys
-    ? keys.some(key => partSource(state, key) === null)
-    : typeof state.customerParts !== "boolean";
+export function selectedPartKeys(state) {
+  if (!Array.isArray(state.selectedOperations)) return null;
+
+  return [
+    ...new Set(
+      state.selectedOperations.flatMap(id => materialsFor(id) ?? [])
+    ),
+  ];
+}
+
+export function operationRequiresParts(id, company) {
+  if (typeof id !== "string" || id === "other") return true;
+  if (materialsFor(id)) return true;
+
+  const [serviceId, optionId] = id.split(":");
+  const service = company?.services.find(item => item.id === serviceId);
+
+  if (!service) {
+    return ["timing_service", "clutch"].includes(serviceId);
+  }
+
+  const option = service.options?.find(item => item.id === optionId);
+
+  return option?.requiresParts === true || service.requiresParts === true;
+}
+
+export function hasUnspecifiedPartsSupply(state, company) {
+  if (
+    !Array.isArray(state.selectedOperations) ||
+    !state.selectedOperations.length
+  ) {
+    return typeof state.customerParts !== "boolean";
+  }
+
+  return state.selectedOperations.some(id => {
+    const keys = materialsFor(id);
+
+    if (keys) {
+      return keys.some(key => partSource(state, key) === null);
+    }
+
+    return (
+      operationRequiresParts(id, company) &&
+      typeof state.customerParts !== "boolean"
+    );
+  });
+}
+
+export function operationsFingerprint(state) {
+  return Array.isArray(state.selectedOperations)
+    ? [...new Set(state.selectedOperations)].sort()
+    : undefined;
 }

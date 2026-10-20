@@ -116,10 +116,20 @@ export function createChatHandler({
         return response.status(409).json({ error: errors.staleConversation });
       }
       const repo = session.repository;
-      if (
+            if (
         repo.activeCount() > 12 ||
-        !repo.allow("chat-ip:" + request.ip, 30, 60000) ||
-        !repo.allow("chat-global", 120, 60000)
+        !repo.allowMany([
+          {
+            bucket: "chat-ip:" + request.ip,
+            limit: 30,
+            windowMs: 60000,
+          },
+          {
+            bucket: "chat-global",
+            limit: 120,
+            windowMs: 60000,
+          },
+        ])
       )
         return response
           .status(429)
@@ -382,7 +392,7 @@ export function createSessionHandler({
         const previous = previousSentRequest(session, session.lastDelivery) ?? previousSentRequest(session);
         Object.assign(session, {
           restarted: true,
-          emptyExpiresAt: null,
+                    emptyExpiresAt: Date.now() + 5 * 60 * 1000,
           previousDelivery: previous?.deliveryId ?? null,
           requestId: randomUUID(),
           revision: 0,

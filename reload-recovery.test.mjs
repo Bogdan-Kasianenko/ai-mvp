@@ -78,7 +78,7 @@ test('orphaned persisted work becomes a visible failure without an automatic AI 
 test('disconnect after explicit send consent cannot duplicate delivery',async()=>{
  const h=harness();let sends=0;const finish=deferred(),entered=deferred();
  try{
-  const state=emptyIntakeState();Object.assign(state,{intent:'service_request',serviceId:'oil_filters',serviceOptionId:'engine_oil',requestedWork:'Výměna oleje',customerParts:true,oilFilterScopeReviewed:true,additionalServicesReviewed:true,preferredTime:'2026-10-26'});Object.assign(state.vehicle,{brand:'Suzuki',model:'Swift',year:'2018'});Object.assign(state.customer,{name:'Test',email:'test@example.com'});
+  const state=emptyIntakeState();Object.assign(state,{intent:'service_request', selectedOperations: ["oil_filters:engine_oil"], serviceId:'oil_filters',serviceOptionId:'engine_oil',requestedWork:'Výměna oleje',customerParts:true,oilFilterScopeReviewed:true,additionalServicesReviewed:true,preferredTime:'2026-10-26'});Object.assign(state.vehicle,{brand:'Suzuki',model:'Swift',year:'2018'});Object.assign(state.customer,{name:'Test',email:'test@example.com'});
   h.first.intake=state;const token=prepareConfirmation(h.first);h.first.persist();
   const handler=createChatHandler({getSession:h.store,loadCompanyData:async()=>company,replyToMessage:async(_m,_c,_h,intake)=>{entered.resolve();await finish.promise;return{kind:'reply',text:'Ano',intake,language:'cs',submissionAction:'confirm_send'};},sendConfirmation:args=>handleSendConfirmation({...args,sendRequest:async()=>{sends++;}})});
   const body={message:'ano',messageId:'consent-once',confirmationToken:token};const out=response();const task=handler(h.request(body),out);await entered.promise;out.destroyed=true;out.emit('close');finish.resolve();await task;

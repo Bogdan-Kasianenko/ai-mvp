@@ -10,6 +10,99 @@ export function createRepository(path = ":memory:") {
     CREATE TABLE IF NOT EXISTS deliveries(id TEXT PRIMARY KEY, session_id TEXT NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL, updated INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS attempts(bucket TEXT NOT NULL, time INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS attempts_time ON attempts(time);`);
+    let nextEmptyMigrationAt = Infinity;
+
+  function migrateEmptySessions() {
+    db.exec("BEGIN IMMEDIATE");
+
+    try {
+      const now = Date.now();
+      const emptyTtl = 5 * 60 * 1000;
+      const previousTtl = 24 * 60 * 60 * 1000;
+      let retryAt = Infinity;
+
+      const rows = db.prepare(
+        "SELECT id,data,expires,locked_until FROM sessions",
+      ).all();
+
+      const update = db.prepare(
+        "UPDATE sessions SET data=?,expires=? WHERE id=?",
+      );
+
+      for (const row of rows) {
+        let session;
+
+        try {
+          session = JSON.parse(row.data);
+        } catch {
+          continue;
+        }
+
+        if (
+          !session ||
+          !Array.isArray(session.history) ||
+          !Number.isFinite(row.expires)
+        ) {
+          continue;
+        }
+
+        if (
+          session.history.some(entry => entry?.role === "user") ||
+          session.lastDelivery ||
+          session.pendingRequest
+        ) {
+          continue;
+        }
+
+        if (row.locked_until > now) {
+          retryAt = Math.min(retryAt, row.locked_until);
+          continue;
+        }
+
+        const legacyDeadline = row.expires > now + emptyTtl
+          ? row.expires - previousTtl + emptyTtl
+          : row.expires;
+
+        const deadline = Math.min(
+          row.expires,
+          now + emptyTtl,
+          Number.isFinite(session.emptyExpiresAt)
+            ? session.emptyExpiresAt
+            : legacyDeadline,
+        );
+
+        if (
+          session.emptyExpiresAt === deadline &&
+          session.expiresAt === deadline &&
+          row.expires === deadline
+        ) {
+          continue;
+        }
+
+        session.emptyExpiresAt = deadline;
+        session.expiresAt = deadline;
+
+        update.run(JSON.stringify(session), deadline, row.id);
+      }
+
+      db.prepare(
+        "DELETE FROM sessions WHERE expires<=? AND locked_until<=?",
+      ).run(now, now);
+
+      db.exec("COMMIT");
+      nextEmptyMigrationAt = retryAt;
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
+  try {
+    migrateEmptySessions();
+  } catch (error) {
+    db.close();
+    throw error;
+  }
   return {
     load(id) {
       const row = db
@@ -72,22 +165,46 @@ export function createRepository(path = ":memory:") {
           .run(Date.now(), id).changes === 1
       );
     },
-    allow(bucket, limit, windowMs) {
+        allow(bucket, limit, windowMs) {
+      return this.allowMany([{ bucket, limit, windowMs }]);
+    },
+
+    allowMany(limits) {
       db.exec("BEGIN IMMEDIATE");
+
       try {
+        const now = Date.now();
+
         db.prepare("DELETE FROM attempts WHERE time<?").run(
-          Date.now() - 24 * 60 * 60 * 1000,
+          now - 24 * 60 * 60 * 1000,
         );
-        const count = db
-          .prepare(
-            "SELECT count(*) AS n FROM attempts WHERE bucket=? AND time>?",
-          )
-          .get(bucket, Date.now() - windowMs).n;
-        if (count >= limit) {
-          db.exec("COMMIT");
-          return false;
+
+        const countAttempts = db.prepare(
+          "SELECT count(*) AS n FROM attempts WHERE bucket=? AND time>?",
+        );
+
+        for (const { bucket, limit, windowMs } of limits) {
+          const count = countAttempts.get(
+            bucket,
+            now - windowMs,
+          ).n;
+
+          if (count >= limit) {
+            db.exec("COMMIT");
+            return false;
+          }
         }
-        db.prepare("INSERT INTO attempts VALUES(?,?)").run(bucket, Date.now());
+
+        const insert = db.prepare(
+          "INSERT INTO attempts VALUES(?,?)",
+        );
+
+        for (const bucket of new Set(
+          limits.map(rule => rule.bucket)
+        )) {
+          insert.run(bucket, now);
+        }
+
         db.exec("COMMIT");
         return true;
       } catch (error) {
@@ -95,8 +212,14 @@ export function createRepository(path = ":memory:") {
         throw error;
       }
     },
-    cleanup() {
-      db.prepare("DELETE FROM sessions WHERE expires<? AND locked_until<?").run(
+        cleanup() {
+      if (Date.now() >= nextEmptyMigrationAt) {
+        migrateEmptySessions();
+      }
+
+      db.prepare(
+        "DELETE FROM sessions WHERE expires<=? AND locked_until<=?",
+      ).run(
         Date.now(),
         Date.now(),
       );

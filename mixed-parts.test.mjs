@@ -13,7 +13,7 @@ const company = JSON.parse(readFileSync(new URL("./company.json", import.meta.ur
 const ids = ["engine_oil", "air_filter", "cabin_filter", "fuel_filter", "lpg_filter"];
 function full(base = false, overrides = {}) {
   const state = emptyIntakeState();
-  Object.assign(state, { intent: "service_request", serviceId: "oil_filters", serviceOptionId: "engine_oil", customerParts: base, oilFilterScopeReviewed: true, additionalServicesReviewed: true, requestedWork: "Výměna oleje a olejového, vzduchového, kabinového, palivového a LPG filtru", preferredTime: "2026-10-26" });
+  Object.assign(state, { intent: "service_request", selectedOperations: ids.map(id => "oil_filters:" + id), serviceId: "oil_filters", serviceOptionId: "engine_oil", customerParts: base, oilFilterScopeReviewed: true, additionalServicesReviewed: true, requestedWork: "Výměna oleje a olejového, vzduchového, kabinového, palivového a LPG filtru", preferredTime: "2026-10-26" });
   Object.assign(state.partsOverrides, overrides);
   Object.assign(state.vehicle, { brand: "Suzuki", model: "Swift", year: "2018", engine: "1,4 l", fuel: "benzín + LPG" });
   Object.assign(state.customer, { name: "Test", email: "test@example.com" });

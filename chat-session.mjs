@@ -2,14 +2,17 @@ import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { emptyIntakeState } from "./intake.mjs";
 import { createRepository } from "./storage.mjs";
-import { partsFingerprint } from "./parts-supply.mjs";
+import {
+  partsFingerprint,
+  operationsFingerprint,
+} from "./parts-supply.mjs";
 
 const SESSION_TTL = 24 * 60 * 60 * 1000;
 const EMPTY_SESSION_TTL = 5 * 60 * 1000;
 
 function sessionExpiration(session, time) {
   const started = session.history?.some(entry => entry.role === "user") ||
-    session.lastDelivery || session.previousDelivery;
+        session.lastDelivery;
   if (started) return time + SESSION_TTL;
   // Empty chats have an absolute deadline; polling must not keep them alive.
   session.emptyExpiresAt ??= Math.min(session.expiresAt ?? Infinity, time + EMPTY_SESSION_TTL);
@@ -17,6 +20,7 @@ function sessionExpiration(session, time) {
 }
 export function draftFingerprint(intake) {
   return JSON.stringify({
+    selectedOperations: operationsFingerprint(intake),
     customerParts: intake.customerParts,
     partsOverrides: partsFingerprint(intake),
     serviceId: intake.serviceId,
@@ -52,11 +56,29 @@ export function createChatSessionStore({
     });
   }
 
-  if (
-    !repository.allow("session-create-ip:" + request.ip, 30, 60000) ||
-    !repository.allow("session-create-global", 120, 60000) ||
-    !repository.allow("session-create-ip-hour:" + request.ip, 60, 3600000) ||
-    !repository.allow("session-create-ip-day:" + request.ip, 200, SESSION_TTL)
+    if (
+    !repository.allowMany([
+      {
+        bucket: "session-create-ip:" + request.ip,
+        limit: 30,
+        windowMs: 60000,
+      },
+      {
+        bucket: "session-create-global",
+        limit: 120,
+        windowMs: 60000,
+      },
+      {
+        bucket: "session-create-ip-hour:" + request.ip,
+        limit: 60,
+        windowMs: 3600000,
+      },
+      {
+        bucket: "session-create-ip-day:" + request.ip,
+        limit: 200,
+        windowMs: SESSION_TTL,
+      },
+    ])
   ) {
     throw Object.assign(new Error("Session creation limit reached"), {
       status: 429,

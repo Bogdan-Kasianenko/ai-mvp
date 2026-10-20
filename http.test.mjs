@@ -15,7 +15,7 @@ test("HTTP workflow: trusted collection, price detour, consent, status, reload a
     if (message === "prepare") {
       intake = emptyIntakeState();
       Object.assign(intake, {
-        intent: "service_request",
+        intent: "service_request", selectedOperations: ["oil_filters:engine_oil"],
         serviceId: "oil_filters",
         serviceOptionId: "engine_oil",
         requestedWork: "Oil and filter",

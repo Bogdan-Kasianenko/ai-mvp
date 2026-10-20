@@ -14,6 +14,7 @@ test("brake pad request keeps discs separate and optional details do not block i
   const state = normalizeIntakeState({
     ...emptyIntakeState(),
     intent: "service_request",
+    selectedOperations: ["brakes:brake_pads"],
     serviceId: "brakes",
     serviceOptionId: "brake_pads",
     requestedWork: "Výměna předních brzdových destiček",
@@ -39,7 +40,7 @@ test("unknown or declined details are not requested repeatedly", () => {
 
   assert.deepEqual(state.skipped, ["vehicle.year", "customer.contact", "problem.lastOilChange"]);
   assert.deepEqual(missingIntakeFields(state), [
-    "vehicle.brand", "vehicle.model", "preferredTime", "customer.name", "customer.contact"
+    "selectedOperations", "vehicle.brand", "vehicle.model", "preferredTime", "customer.name", "customer.contact"
   ]);
 });
 

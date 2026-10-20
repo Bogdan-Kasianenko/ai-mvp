@@ -32,7 +32,7 @@ const company = JSON.parse(
 function full() {
   const s = emptyIntakeState();
   Object.assign(s, {
-    intent: "service_request",
+    intent: "service_request", selectedOperations: ["oil_filters:engine_oil"],
     serviceId: "oil_filters",
     serviceOptionId: "engine_oil",
     customerParts: false,
@@ -92,6 +92,7 @@ test("unknown parts blocks a material job, but not diagnostics", () => {
   s.customerParts = null;
   assert.equal(readyToSend(s, company), false);
   assert.ok(missingIntakeFields(s, company).includes("customerParts"));
+  s.selectedOperations = ["diagnostics:"];
   s.serviceId = "diagnostics";
   s.serviceOptionId = null;
   assert.equal(readyToSend(s, company), true);
@@ -105,6 +106,7 @@ test("oil request needs the full filter scope, not merely agreement to an oil fi
   const normalized = normalizeIntakeState({...state, oilFilterScopeReviewed:true},company);
   assert.equal(normalized.oilFilterScopeReviewed, true);
   assert.equal(readyToSend(normalized, company), true);
+  state.selectedOperations = ['oil_filters:cabin_filter'];
   state.serviceOptionId = 'cabin_filter';
   assert.equal(readyToSend(state, company), true, 'A cabin-filter-only job does not require an oil-service upsell');
 });

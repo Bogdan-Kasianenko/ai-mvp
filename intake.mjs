@@ -5,6 +5,8 @@ import {
   normalizePartsOverrides,
   needsOilEngine,
   hasUnspecifiedPartsSupply,
+  normalizeSelectedOperations,
+  operationRequiresParts,
 } from "./parts-supply.mjs";
 import { inspectPhone, normalizePhone } from "./phone-contact.mjs";
 
@@ -38,6 +40,11 @@ const intakeSchema = objectSchema({
   intent: {
     type: "string",
     enum: ["general", "service_discussion", "service_request"],
+  },
+    selectedOperations: {
+    type: ["array", "null"],
+    items: { type: "string" },
+    description: "Complete CURRENT list of selected operations as serviceId:optionId from company.services. For a service without options use serviceId:. Exclude declined/removed work. Use other for an unlisted operation. null means not yet reconstructed; [] means no work selected.",
   },
   customerParts: { type: ["boolean", "null"] },
   partsOverrides: objectSchema(Object.fromEntries(
@@ -121,6 +128,7 @@ export const intakeResponseSchema = objectSchema({
 export function emptyIntakeState() {
   return {
     intent: "general",
+    selectedOperations: null,
     customerParts: null,
     partsOverrides: emptyPartsOverrides(),
     oilFilterScopeReviewed: false,
@@ -169,9 +177,14 @@ export function normalizeIntakeState(value, company) {
   if (typeof value.customerParts === "boolean") {
     state.customerParts = value.customerParts;
   }
-  state.partsOverrides = normalizePartsOverrides(
+    state.selectedOperations = normalizeSelectedOperations(
+    value.selectedOperations,
+    company,
+  );
+    state.partsOverrides = normalizePartsOverrides(
     value.partsOverrides,
     state.customerParts,
+    state.selectedOperations,
   );
   state.oilFilterScopeReviewed = value.oilFilterScopeReviewed === true;
 
@@ -234,6 +247,14 @@ export function hasValidContact(customer) {
 }
 
 export function requiresParts(state, company) {
+    if (
+    Array.isArray(state.selectedOperations) &&
+    state.selectedOperations.length
+  ) {
+    return state.selectedOperations.some(id =>
+      operationRequiresParts(id, company)
+    );
+  }
   if (!company)
     return (
       state.serviceId === "oil_filters" ||
@@ -255,6 +276,17 @@ export function missingIntakeFields(state, company) {
   if (state.intent !== "service_request") return [];
 
   const missing = [];
+    const operations = company
+    ? normalizeSelectedOperations(state.selectedOperations, company)
+    : state.selectedOperations;
+
+  if (
+    !Array.isArray(operations) ||
+    !operations.length ||
+    operations.includes("other")
+  ) {
+    missing.push("selectedOperations");
+  }
   if (
     !state.serviceOptionId &&
     !state.requestedWork &&
@@ -286,11 +318,12 @@ export function missingIntakeFields(state, company) {
     state.oilFilterScopeReviewed !== true
   ) missing.push("oilFilterScopeReviewed");
 
-  if (
-  requiresParts(state, company) &&
-  hasUnspecifiedPartsSupply(state)
-)
-  missing.push("customerParts");
+    if (
+    requiresParts(state, company) &&
+    hasUnspecifiedPartsSupply(state, company)
+  ) {
+    missing.push("customerParts");
+  }
   return missing;
 }
 

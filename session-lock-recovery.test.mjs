@@ -9,7 +9,7 @@ function harness() {
   const repository={
     load(id){if(failRead)throw failure;return rows.get(id)??null;},
     save(session){saveCalls++; rows.set(session.id,structuredClone(session));},
-    cleanup(){}, sessionCount(){return rows.size;}, allow(){return true;},
+    cleanup(){}, sessionCount(){return rows.size;}, allow(){return true;}, allowMany(){return true;},
     lock(id,owner){if(locks.has(id))return false;locks.set(id,owner);return true;},
     unlock(id,owner){unlockCalls++;if(locks.get(id)===owner)locks.delete(id);},
   };
