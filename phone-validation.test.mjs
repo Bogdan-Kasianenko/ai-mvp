@@ -44,8 +44,8 @@ test('an explicit foreign prefix does not use Czech national length',()=>{
  assert.equal(checked.normalized,'+4915123456789');
  assert.equal(checked.nationalLength,null);
 });
-test('contact detection excludes dates and mixed name/phone messages',()=>{
- for(const value of ['2026-10-26','26.10.2026','26/10/2026','Bohdan 787865']) assert.equal(phoneInputContext(value,true),null);
+test('contact detection excludes dates, standalone days and years',()=>{
+ for(const value of ['2026-10-26','26.10.2026','26/10/2026','Radek 26.10.2026','25','2019','Radek 2019']) assert.equal(phoneInputContext(value,true),null);
  assert.equal(phoneInputContext('773654748',false),null);
  assert.equal(phoneInputContext('787865',true).difference,-3);
 });
@@ -54,11 +54,11 @@ test('a valid email allows completion despite an invalid optional phone',()=>{
  assert.equal(readyToSend(state,company),true);
 });
 
-async function modelReply(message,modelPhone,initial=draft()){
+async function modelReply(message,modelPhone,initial=draft(),modelName=initial.customer.name){
  let context;
  const result=await getReply(message,company,[],initial,undefined,false,async params=>{
   context=JSON.parse(params.input[0].content.slice(params.input[0].content.indexOf('{')));
-  const intake=structuredClone(initial);intake.customer.phone=modelPhone;
+  const intake=structuredClone(initial);intake.customer.phone=modelPhone;intake.customer.name=modelName;
   return {status:'completed',output_text:JSON.stringify({safetyWarning:'',reply:'Zkontrolujte prosím celé telefonní číslo.',language:'cs',priceQuoted:false,partsAction:'keep',oilPriceMode:'none',oilPriceRequests:[],oilPriceFollowUp:'',keepClosedDay:false,needsClarification:true,statusFollowUp:'',intake,submissionAction:'none'})};
  });
  assert.equal(result.kind,'reply');
@@ -81,10 +81,63 @@ test('a valid correction overrides the old invalid phone returned by the model',
  assert.equal(result.intake.customer.phone,'+420773654748');
  assert.equal(readyToSend(result.intake,company),true);
 });
-test('a phone extracted by the model from a mixed name/phone message is still validated',async()=>{
+test('mixed name and invalid phone are checked before the model and cannot authorize sending',async()=>{
  const {result,context}=await modelReply('Bohdan 787865','787865');
- assert.equal(context.contactChecks.providedPhone,null);
+ assert.equal(context.contactChecks.providedPhone.valid,false);
+ assert.equal(context.contactChecks.providedPhone.nationalLength,6);
+ assert.equal(context.contactChecks.providedPhone.raw,'787865');
+ assert.equal(result.intake.customer.phone,'787865');
  assert.equal(result.intake.customer.name,'Bohdan');
  assert.equal(hasValidContact(result.intake.customer),false);
  assert.equal(readyToSend(result.intake,company),false);
+});
+
+for(const input of ['Radek 448447445','Radek Novák 448 447 445','Radek +420 448447445','Radek 420448447445','Radek 00420 448447445']){
+ test(`mixed contact ${input} supplies a valid server check and overrides a bad model phone`,async()=>{
+  const initial=draft();initial.customer.name=null;
+  const {result,context}=await modelReply(input,'787865',initial,'Radek');
+  assert.equal(context.contactChecks.providedPhone.valid,true);
+  assert.equal(context.contactChecks.providedPhone.nationalLength,9);
+  assert.equal(context.contactChecks.providedPhone.normalized,'+420448447445');
+  assert.equal(result.intake.customer.name,'Radek');
+  assert.equal(result.intake.customer.phone,'+420448447445');
+  assert.equal(readyToSend(result.intake,company),true);
+ });
+}
+for(const [input,raw,length] of [['Radek 787865','787865',6],['Radek 4484474455','4484474455',10]]){
+ test(`invalid mixed contact ${input} stores only the original number despite a model-invented valid number`,async()=>{
+  const {result,context}=await modelReply(input,'448447445',draft(),'Radek');
+  assert.equal(context.contactChecks.providedPhone.valid,false);
+  assert.equal(context.contactChecks.providedPhone.nationalLength,length);
+  assert.equal(context.contactChecks.providedPhone.raw,raw);
+  assert.equal(result.intake.customer.phone,raw);
+  assert.equal(result.intake.customer.name,'Radek');
+  assert.equal(readyToSend(result.intake,company),false);
+ });
+}
+test('timing-belt request checks mixed contact even while material supply is unresolved',async()=>{
+ const initial=draft();
+ Object.assign(initial,{selectedOperations:['timing_service:'],serviceId:'timing_service',serviceOptionId:null,requestedWork:'Výměna rozvodů',customerParts:null});
+ Object.assign(initial.vehicle,{brand:'Range Rover',model:'Autobiography',year:'2019'});
+ initial.customer.name=null;
+ assert.ok(missingIntakeFields(initial,company).includes('customerParts'));
+ const {result,context}=await modelReply('radek 448447445','787865',initial,'Radek');
+ assert.equal(context.contactChecks.providedPhone.valid,true);
+ assert.equal(result.intake.customer.phone,'+420448447445');
+ assert.equal(result.intake.customer.name,'Radek');
+ assert.equal(result.intake.customerParts,null);
+ assert.ok(missingIntakeFields(result.intake,company).includes('customerParts'));
+ assert.ok(!missingIntakeFields(result.intake,company).includes('customer.contact'));
+ assert.equal(readyToSend(result.intake,company),false);
+});
+test('an appointment day does not overwrite a stored invalid phone while collecting contact',async()=>{
+ const initial=draft();initial.customer.phone='787865';
+ const {result,context}=await modelReply('27','787865',initial);
+ assert.equal(context.contactChecks.providedPhone,null);
+ assert.equal(result.intake.customer.phone,'787865');
+});
+test('a mixed phone message is not forced into contact context before an appointment is known',async()=>{
+ const initial=draft();initial.preferredTime=null;
+ const {context}=await modelReply('Radek 448447445','448447445',initial,'Radek');
+ assert.equal(context.contactChecks.providedPhone,null);
 });

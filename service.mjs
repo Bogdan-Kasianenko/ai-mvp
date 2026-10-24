@@ -41,9 +41,10 @@ export async function getReply(
   };
 
   const missing = missingIntakeFields(intake, company);
-const expectingContact = intake.intent === "service_request" &&
+const expectingContact =
+  intake.intent === "service_request" &&
   missing.includes("customer.contact") &&
-  missing.every((field) => ["customer.name", "customer.contact"].includes(field));
+  Boolean(intake.preferredTime);
 const providedPhoneCheck = phoneInputContext(message, expectingContact);
 const contactChecks = {
   storedPhone: inspectPhone(intake.customer.phone),
@@ -129,9 +130,12 @@ const contactChecks = {
     }
     if (providedPhoneCheck) {
   parsed.intake.customer.phone = providedPhoneCheck.valid
-    ? providedPhoneCheck.normalized : message.trim();
+    ? providedPhoneCheck.normalized
+    : providedPhoneCheck.raw;
 } else {
-  parsed.intake.customer.phone = normalizePhone(parsed.intake.customer.phone);
+  parsed.intake.customer.phone = normalizePhone(
+    parsed.intake.customer.phone
+  );
 }
     if (parsed.partsAction === "keep") {
       parsed.intake.customerParts = intake.customerParts;

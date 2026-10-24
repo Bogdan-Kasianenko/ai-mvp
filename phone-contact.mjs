@@ -24,9 +24,29 @@ export function normalizePhone(value) {
 }
 
 export function phoneInputContext(message, expectingContact) {
-  const text = String(message).trim();
-  if (!expectingContact || !/^[+\d\s().-]+$/.test(text)) return null;
-  // A complete date must not be treated as a phone-number correction.
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text) || /^\d{1,2}\s*[./]\s*\d{1,2}\s*[./]\s*\d{4}\.?$/.test(text)) return null;
-  return inspectPhone(text);
+  if (!expectingContact) return null;
+
+  const text = String(message ?? "").trim();
+
+  // Имя из 1–3 слов перед номером: Radek 448447445.
+  const named = text.match(
+    /^(?:[\p{L}\p{M}][\p{L}\p{M}'’.-]*[ \t]+){1,3}([+]?\d[\d \t().-]*)$/u
+  );
+
+  const raw = named ? named[1].trim() : text;
+
+  if (!/^[+\d\s().-]+$/.test(raw)) return null;
+
+  // Полная дата не должна становиться телефоном.
+  if (
+    /^\d{4}-\d{2}-\d{2}$/.test(raw) ||
+    /^\d{1,2}\s*[./]\s*\d{1,2}\s*[./]\s*\d{4}\.?$/.test(raw)
+  ) {
+    return null;
+  }
+
+  // Отдельный день или год не считаем номером.
+  if (raw.replace(/\D/g, "").length <= 4) return null;
+
+  return { ...inspectPhone(raw), raw };
 }
