@@ -14,13 +14,13 @@ function complete(date){
  Object.assign(state.customer,{name:'Test',email:'test@example.com'});
  return state;
 }
-async function run(date,text,language){
+async function run(date,text,language,safetyWarning=""){
  const state=complete('2026-10-24');
  const session={id:'warning-test',intake:state,history:[],revision:0,requestId:'warning-draft',language,confirmation:null,lastDelivery:null,acquire:()=>true,release(){},persist(){},repository:{activeCount:()=>0,allow:()=>true,allowMany:()=>true,delivery:()=>null}};
  const oldToken=prepareConfirmation(session);
  let sends=0;
  const handler=createChatHandler({getSession:()=>session,loadCompanyData:async()=>company,
-  replyToMessage:async()=>({kind:'reply',text,intake:complete(date),language,submissionAction:'confirm_send',keepClosedDay:false}),
+  replyToMessage:async()=>({kind:'reply',text,safetyWarning,intake:complete(date),language,submissionAction:'confirm_send',keepClosedDay:false}),
   sendConfirmation:async()=>{sends++;throw Error('Unexpected email');}});
  const response=Object.assign(new EventEmitter(),{locals:{},writableEnded:false,status(code){this.code=code;return this;},json(body){this.body=body;return this;}});
  await handler({body:{message:date,messageId:'warning-message',confirmationToken:oldToken},ip:'test'},response);
@@ -33,7 +33,7 @@ const warnings={
 for(const language of ['cs','ru'])for(const [date,reason] of [['31.02.2027','invalid'],['2020-01-01','past'],['2026-10-25','closed']])test(`safety warning survives ${reason} calendar block (${language})`,async t=>{
  t.mock.timers.enable({apis:['Date'],now:Date.parse('2026-10-20T08:00:00Z')});
  const warning=warnings[language];
- const {session,body,sends}=await run(date,warning,language);
+ const {session,body,sends}=await run(date,warning,language,warning);
  assert.ok(body.reply.startsWith(warning),'the already generated warning must remain intact and first');
  const tail=body.reply.slice(warning.length).trim();
  assert.ok(tail.length>20,'calendar clarification is also included');

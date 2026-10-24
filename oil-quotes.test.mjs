@@ -59,7 +59,7 @@ async function modeled(payload, initial) {
   return getReply("Test", company, [], initial, undefined, false, async () => ({ status: "completed", output_text: JSON.stringify(payload) }));
 }
 function payload(initial) {
-  return { reply: "Jasně.", language: "cs", priceQuoted: true, keepClosedDay: false, needsClarification: false, statusFollowUp: "", submissionAction: "none", intake: structuredClone(initial), partsAction: "keep", oilPriceMode: "requested", oilPriceRequests: [requests[0]], oilPriceFollowUp: "Jaký termín Vám vyhovuje?" };
+  return { safetyWarning: "", reply: "Jasně.", language: "cs", priceQuoted: true, keepClosedDay: false, needsClarification: false, statusFollowUp: "", submissionAction: "none", intake: structuredClone(initial), partsAction: "keep", oilPriceMode: "requested", oilPriceRequests: [requests[0]], oilPriceFollowUp: "Jaký termín Vám vyhovuje?" };
 }
 test("a hypothetical response cannot overwrite suppliers when partsAction is keep", async () => {
   const initial = state(false, false);
@@ -78,4 +78,10 @@ test("free text with an extra model-written price is rejected instead of contrad
   const response = payload(initial);
   response.reply = "Palivový filtr stojí 200 Kč.";
   assert.equal((await modeled(response, initial)).kind, "unavailable");
+});
+
+// Calendar fixtures below are evaluated relative to this fixed Prague date.
+import { beforeEach } from "node:test";
+beforeEach(t => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-20T08:00:00Z") });
 });

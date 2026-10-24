@@ -145,7 +145,13 @@ const contactChecks = {
     }
     return {
       kind: "reply",
-      text: [parsed.reply.trim(), oilPrices.text, parsed.oilPriceFollowUp.trim()].filter(Boolean).join("\n\n"),
+safetyWarning: parsed.safetyWarning.trim(),
+    text: [
+         parsed.safetyWarning.trim(),
+         parsed.reply.trim(),
+         oilPrices.text,
+         parsed.oilPriceFollowUp.trim(),
+      ].filter(Boolean).join("\n\n"),
       oilPriceRecords: oilPrices.records,
       needsClarification: parsed.needsClarification,
       intake: parsed.intake,

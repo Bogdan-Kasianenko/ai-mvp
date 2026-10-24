@@ -65,9 +65,15 @@ test('legacy unknown scope retains suppliers until the list is reconstructed',()
 });
 test('service normalizes current scope before returning prices and intake',async()=>{
  const state=full();const intake=structuredClone(state);intake.partsOverrides.lpgFilter=true;
- const model={reply:'Dobře.',language:'cs',priceQuoted:false,keepClosedDay:false,needsClarification:false,statusFollowUp:'',submissionAction:'none',intake,partsAction:'update',oilPriceMode:'requested',oilPriceRequests:[{optionId:'engine_oil',source:'selected'}],oilPriceFollowUp:''};
+ const model={safetyWarning:'',reply:'Dobře.',language:'cs',priceQuoted:false,keepClosedDay:false,needsClarification:false,statusFollowUp:'',submissionAction:'none',intake,partsAction:'update',oilPriceMode:'requested',oilPriceRequests:[{optionId:'engine_oil',source:'selected'}],oilPriceFollowUp:''};
  const result=await getReply('Cena?',company,[],state,undefined,false,async()=>({status:'completed',output_text:JSON.stringify(model)}));
  assert.equal(result.kind,'reply');
  assert.equal(result.intake.partsOverrides.lpgFilter,null);
  assert.equal(result.oilPriceRecords[0].variants[0].priceFromKc,400);
+});
+
+// Calendar fixtures below are evaluated relative to this fixed Prague date.
+import { beforeEach } from "node:test";
+beforeEach(t => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-20T08:00:00Z") });
 });

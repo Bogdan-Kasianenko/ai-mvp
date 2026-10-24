@@ -309,6 +309,7 @@ test("Russian summary and confirmation are generated in the selected language", 
 });
 function modelPayload() {
   return {
+    safetyWarning: "",
     reply: "Děkuji.",
     language: "cs",
     priceQuoted: false,
@@ -381,4 +382,27 @@ test("malformed or incomplete model replies are not exposed to customers", async
     );
     assert.equal(result.kind, "unavailable");
   }
+});
+
+// Calendar fixtures below are evaluated relative to this fixed Prague date.
+import { beforeEach } from "node:test";
+beforeEach(t => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-20T08:00:00Z") });
+});
+
+test("runtime schema requires a string safetyWarning and accepts a safety-only reply", () => {
+  const good=modelPayload();
+  const missing={...good};delete missing.safetyWarning;
+  assert.equal(validateModelResponse(missing),false);
+  assert.equal(validateModelResponse({...good,safetyWarning:null}),false);
+  assert.equal(validateModelResponse({...good,safetyWarning:false}),false);
+  assert.equal(validateModelResponse({...good,reply:"",safetyWarning:"Nepokračujte v jízdě."}),true);
+  assert.equal(validateModelResponse({...good,reply:"",safetyWarning:""}),false);
+});
+test("service preserves safetyWarning separately and includes it once in the reply",async()=>{
+ const payload=modelPayload();payload.safetyWarning="Nepokračujte v jízdě.";
+ const result=await getReply("Test",company,[],full(),undefined,false,async()=>({status:"completed",output_text:JSON.stringify(payload)}));
+ assert.equal(result.kind,"reply");
+ assert.equal(result.safetyWarning,payload.safetyWarning);
+ assert.equal(result.text,payload.safetyWarning+"\n\n"+payload.reply);
 });

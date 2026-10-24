@@ -39,6 +39,7 @@ test("the model response must contain a boolean keepClosedDay field", () => {
     oilPriceMode: "none",
     oilPriceRequests: [],
     oilPriceFollowUp: "",
+    safetyWarning: "",
     reply: "Děkuji.", language: "cs", priceQuoted: false, keepClosedDay: false,
     needsClarification: false, statusFollowUp: "", submissionAction: "none", intake: complete(),
   };
@@ -79,4 +80,10 @@ test("a completed Sunday draft receives a warning without a send token or mail c
   assert.equal(response.body.intake.preferredTime, null);
   assert.equal(response.body.confirmationToken, null);
   assert.equal(sends, 0);
+});
+
+// Calendar fixtures below are evaluated relative to this fixed Prague date.
+import { beforeEach } from "node:test";
+beforeEach(t => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-20T08:00:00Z") });
 });

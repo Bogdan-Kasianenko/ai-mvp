@@ -784,6 +784,10 @@ async function syncServerSession() {
       reset ? "/api/session/reset" : "/api/session",
       {
         method: reset ? "POST" : "GET",
+        ...(reset ? {
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "expired" }),
+        } : {}),
         signal: AbortSignal.timeout(10000),
       },
     ); } catch { throw new Error(uiMessages.connectionFailed); }

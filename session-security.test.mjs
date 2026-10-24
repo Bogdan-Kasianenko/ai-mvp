@@ -498,3 +498,9 @@ test("incomplete amendments and Russian status do not imply that the changed req
   assert.match(status.body.reply,/Изменения в текущей заявке пока не отправлены/);
   assert.equal(h.sent.length,1);
 });
+
+// Calendar fixtures below are evaluated relative to this fixed Prague date.
+import { beforeEach } from "node:test";
+beforeEach(t => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.parse("2026-10-20T08:00:00Z") });
+});

@@ -85,6 +85,10 @@ const intakeSchema = objectSchema({
 });
 
 export const intakeResponseSchema = objectSchema({
+    safetyWarning: {
+    type: "string",
+    description: "All immediate safety advice and urgent safety questions, in the customer language. Empty when not needed. Never put booking, contact collection or prices here. Do not repeat this content in reply.",
+  },
   reply: {
     type: "string",
     description: "When oilPriceMode is requested or automatic: a short natural reaction without currency amounts, without announcing the price table, and without a follow-up question. Put that question only in oilPriceFollowUp.",
@@ -354,6 +358,6 @@ function matchesSchema(value, schema) {
 }
 export function validateModelResponse(value) {
   return (
-    matchesSchema(value, intakeResponseSchema) && Boolean(value.reply.trim())
-  );
+    matchesSchema(value, intakeResponseSchema) &&
+    Boolean(value.reply.trim() || value.safetyWarning.trim())  );
 }

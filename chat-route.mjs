@@ -253,9 +253,12 @@ while (
     : closedDayMessage(review.info, session.language);
 
   return answer({
-    reply: [...new Set([result.text.trim(), dateClarification])]
-      .filter(Boolean)
-      .join("\n\n"),
+    reply: [...new Set([
+  result.safetyWarning?.trim(),
+  dateClarification,
+])]
+  .filter(Boolean)
+  .join("\n\n"),
     intake: next,
     missingFields: missingIntakeFields(next, company),
   });
@@ -391,8 +394,8 @@ export function createSessionHandler({
       if (reset) {
         const previous = previousSentRequest(session, session.lastDelivery) ?? previousSentRequest(session);
         Object.assign(session, {
-          restarted: true,
-                    emptyExpiresAt: Date.now() + 5 * 60 * 1000,
+          restarted: request.body?.reason !== "expired",
+          emptyExpiresAt: Date.now() + 5 * 60 * 1000,
           previousDelivery: previous?.deliveryId ?? null,
           requestId: randomUUID(),
           revision: 0,
