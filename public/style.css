@@ -1918,3 +1918,134 @@ line-height: 1;
   color: #00b8a9;
   box-shadow: none;
 }
+
+/* Вертикальное отображение цен */
+#chat-panel .chat-price-table {
+  overflow: hidden;
+}
+
+#chat-panel .chat-price-table table,
+#chat-panel .chat-price-table tbody {
+  display: block;
+  width: 100%;
+}
+
+#chat-panel .chat-price-table thead {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+#chat-panel .chat-price-table tbody tr {
+  display: block;
+  padding: 16px;
+}
+
+#chat-panel .chat-price-table tbody tr + tr {
+  border-top: 1px solid rgba(45, 92, 94, 0.15);
+}
+
+#chat-panel .chat-price-table td {
+  display: block;
+  padding: 0;
+  border: 0;
+  text-align: left;
+  white-space: normal;
+}
+
+#chat-panel .chat-price-table td:first-child {
+  min-width: 0;
+  margin-bottom: 14px;
+  color: #355659;
+  font-weight: 650;
+  overflow-wrap: break-word;
+}
+
+#chat-panel .chat-price-table td:not(:first-child) {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  white-space: normal;
+  color: #007c75;
+  font-weight: 750;
+}
+
+#chat-panel .chat-price-table td:not(:first-child)
+  + td:not(:first-child) {
+  margin-top: 12px;
+}
+
+#chat-panel .chat-price-table td[data-label]::before {
+  content: attr(data-label);
+  color: #355659;
+  font-size: 0.85em;
+  font-weight: 500;
+}
+ #chat-panel .chat-price-table td[data-label]::before {
+  font-size: 1em;
+}
+
+#chat-panel .chat-price-table td:not(:first-child)
+  + td:not(:first-child) {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(45, 92, 94, 0.18);
+}
+
+#chat-panel .chat-price-table tbody tr {
+  padding: 0;
+}
+
+#chat-panel .chat-price-table td:first-child {
+  margin: 0;
+  padding: 16px;
+  background: rgba(0, 124, 117, 0.08);
+  border-bottom: 1px solid rgba(45, 92, 94, 0.12);
+}
+
+#chat-panel .chat-price-table td:not(:first-child) {
+  padding: 14px 16px;
+}
+
+#chat-panel .chat-price-table td:not(:first-child)
+  + td:not(:first-child) {
+  margin-top: 0;
+  padding-top: 14px;
+  border-top: 1px solid rgba(45, 92, 94, 0.12);
+}
+
+#chat-panel .chat-message__meta {
+  transition:
+    color 200ms ease,
+    opacity 200ms ease,
+    text-shadow 200ms ease;
+}
+
+@media (hover: hover) {
+  #chat-panel .chat-message:has(.chat-message__bubble:hover)
+    .chat-message__meta {
+    color: #007c75;
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #chat-panel .chat-message--user:not(.chat-message--restored) {
+    animation: chat-message-in 380ms
+      cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #chat-panel .chat-message--user:not(.chat-message--restored),
+  #chat-panel .chat-message--ai:not(.chat-message--restored):has(.chat-typing) {
+    animation: chat-message-in 300ms
+      cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+}

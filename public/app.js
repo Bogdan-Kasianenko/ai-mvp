@@ -1278,11 +1278,16 @@ function renderAssistantText(container, text) {
       ) {
         const row = document.createElement("tr");
 
-        for (const value of cells(lines[index])) {
-          const cell = document.createElement("td");
-          cell.textContent = value;
-          row.append(cell);
-        }
+        for (const [column, value] of cells(lines[index]).entries()) {
+  const cell = document.createElement("td");
+  cell.textContent = value;
+
+  if (column > 0) {
+    cell.dataset.label = headers[column];
+  }
+
+  row.append(cell);
+}
 
         body.append(row);
         index++;
@@ -1360,9 +1365,11 @@ if (isUser) {
   messages.append(row);
 
   if (!restored && (isUser || isNearBottom)) {
-    requestAnimationFrame(scrollMessagesToBottom);
-  }
-
+  messages.scrollTo({
+    top: messages.scrollHeight,
+    behavior: "instant",
+  });
+}
   return row;
 }
 
@@ -1394,6 +1401,7 @@ function placeHistoryRow(row, entry) {
 }
 
 function showTypingMessage() {
+  const shouldScroll = isNearMessagesBottom();
   const row = showMessage("AI asistent", "");
   const content = row.querySelector(".chat-message__text");
 
@@ -1409,7 +1417,16 @@ function showTypingMessage() {
   }
 
   content.append(dots);
-  return row;
+
+if (shouldScroll) {
+  requestAnimationFrame(() => {
+    if (row.isConnected) {
+      scrollMessagesToBottom();
+    }
+  });
+}
+
+return row;
 }
 
 function finishTypingMessage(row, text) {
@@ -1430,7 +1447,9 @@ function finishTypingMessage(row, text) {
   renderAssistantText(content, text);
 
   const after = bubble.getBoundingClientRect();
-  const bodyWidth = body.getBoundingClientRect().width;
+  const bodyRect = body.getBoundingClientRect();
+  const bodyWidth = bodyRect.width;
+  const bodyHeight = bodyRect.height;
   const textWidth = content.getBoundingClientRect().width;
 
   const reducedMotion = window.matchMedia(
@@ -1438,17 +1457,28 @@ function finishTypingMessage(row, text) {
   ).matches;
 
   if (reducedMotion || !before.width || !after.width) {
-    if (wasNearBottom) {
-      requestAnimationFrame(scrollMessagesToBottom);
-    }
-    return;
+  if (wasNearBottom) {
+    messages.scrollTo({
+      top: messages.scrollHeight,
+      behavior: "instant",
+    });
   }
-
+  return;
+}
   body.style.width = `${bodyWidth}px`;
   content.style.width = `${textWidth}px`;
   bubble.style.boxSizing = "border-box";
   bubble.style.overflow = "hidden";
+  // Сразу занимаем место под полный ответ,
+// пока сам пузырь плавно увеличивается.
+body.style.minHeight = `${bodyHeight}px`;
 
+if (wasNearBottom) {
+  messages.scrollTo({
+    top: messages.scrollHeight,
+    behavior: "smooth",
+  });
+}
   const expansion = bubble.animate(
     [
       {
@@ -1472,14 +1502,12 @@ function finishTypingMessage(row, text) {
   );
 
   const cleanup = () => {
-    body.style.removeProperty("width");
-    content.style.removeProperty("width");
-    bubble.style.removeProperty("box-sizing");
-    bubble.style.removeProperty("overflow");
-
-    if (wasNearBottom) scrollMessagesToBottom();
-  };
-
+  body.style.removeProperty("width");
+  body.style.removeProperty("min-height");
+  content.style.removeProperty("width");
+  bubble.style.removeProperty("box-sizing");
+  bubble.style.removeProperty("overflow");
+};
   expansion.onfinish = cleanup;
   expansion.oncancel = cleanup;
 }
@@ -1662,11 +1690,19 @@ form.addEventListener("submit", async (event) => {
   input.value = "";
   resizeMessageInput();
 
-  const typingRowPromise = Promise.resolve({
-    row: showTypingMessage(),
-    shownAt: performance.now(),
-  });
+  const typingRowPromise = new Promise((resolve) => {
+  setTimeout(() => {
+    if (generation !== chatGeneration) {
+      resolve({ row: null, shownAt: performance.now() });
+      return;
+    }
 
+    resolve({
+      row: showTypingMessage(),
+      shownAt: performance.now(),
+    });
+  }, 650);
+});
   try {
     let reply;
     let nextIntake = null;

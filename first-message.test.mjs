@@ -33,7 +33,7 @@ function browserSubmit({initial={},after={},sync,post}={}) {
   isValidHistoryEntry:entry=>Boolean(entry?.id&&entry?.at&&entry?.content),receiveClientMessages(){},
   PENDING_CHAT_MESSAGE_KEY:'pending',PENDING_CHAT_CONTEXT_KEY:'pending-context',CHAT_INTAKE_KEY:'intake',
   sessionStorage:{setItem:(key,value)=>sessionValues.set(key,value),getItem:key=>sessionValues.get(key)??null,removeItem:key=>sessionValues.delete(key)},
-  localStorage:{setItem(){}},performance:{now:()=>clock+=500},AbortSignal:{timeout:()=>undefined},
+  localStorage:{setItem(){}},setTimeout,performance:{now:()=>clock+=500},AbortSignal:{timeout:()=>undefined},
   form:{addEventListener:(name,callback)=>{assert.equal(name,'submit');submit=callback;}},
   syncServerSession:async()=>{
    if(sync)return sync(context);
