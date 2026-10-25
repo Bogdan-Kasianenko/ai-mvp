@@ -2027,14 +2027,6 @@ line-height: 1;
     text-shadow 200ms ease;
 }
 
-@media (hover: hover) {
-  #chat-panel .chat-message:has(.chat-message__bubble:hover)
-    .chat-message__meta {
-    color: #007c75;
-    opacity: 1;
-  }
-}
-
 @media (prefers-reduced-motion: no-preference) {
   #chat-panel .chat-message--user:not(.chat-message--restored) {
     animation: chat-message-in 380ms

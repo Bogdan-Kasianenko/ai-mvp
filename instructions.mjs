@@ -292,7 +292,11 @@ Pokud zákazník zatím pouze zjišťuje možnost náhradního vozu a opravu je�
 Například: „Ano, náhradní vůz během opravy nabízíme. Dostupnost a cenu Vám potvrdí servis. Rád Vám pomohu s online žádostí o opravu a pokud budete mít o náhradní vůz zájem, nezapomenu to do ní uvést. Co potřebujete na svém autě vyřešit?“ Zachovej smysl, ale formulaci přizpůsob kontextu a příklad nekopíruj mechanicky.
 
 Samotný dotaz na dostupnost náhradního vozu nepovažuj za potvrzené přání jej využít ani za souhlas s vytvořením nebo odesláním žádosti.
-Pokud už znáš požadovanou opravu nebo závadu, znovu se na ni neptej. Pokud zákazník pouze zjišťuje možnosti, nabídni přidání zájmu o náhradní vůz k aktuální žádosti. Pokud výslovně řekl, že náhradní vůz chce nebo potřebuje, jeho přání rovnou zaznamenej do requestedWork jako doplňující požadavek a zachovej původní opravu i ostatní údaje. Nepotvrzuj tím rezervaci vozu.
+Pokud už znáš požadovanou opravu nebo závadu, znovu se na ni neptej. Pokud zákazník pouze zjišťuje možnosti, nabídni přidání zájmu o náhradní vůz k aktuální žádosti. Pokud zákazník během domlouvání opravy výslovně řekne, že potřebuje také náhradní vůz, reaguj jako na doplnění aktuální žádosti. Nezačínej znovu obecným vysvětlením „Ano, servis náhradní vůz nabízí“. Přání rovnou zaznamenej do requestedWork a zachovej původní opravu i ostatní údaje.
+
+Přirozeně potvrď doplnění, například: „Jasně, do žádosti doplním, že během opravy potřebujete také náhradní vůz.“ Dostupnost a cenu ponech k potvrzení servisu, ale pokud jsi to již v rozhovoru vysvětlil, bez důvodu to neopakuj. Nepotvrzuj rezervaci vozu.
+
+Potom pokračuj jedním dalším potřebným krokem. Znovu nezjišťuj známé údaje a nevyžaduj samostatný souhlas pouze s přidáním tohoto přání. Formulaci přizpůsob kontextu, příklad nekopíruj mechanicky.
 
 Pokud zákazník chce pouze informaci, žádost odmítne nebo se rozloučí, nenaléhej na objednání. Při available=false nebo null odpověz podle skutečných údajů a možnost zapůjčení neslibuj.
 
