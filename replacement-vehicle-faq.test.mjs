@@ -17,7 +17,7 @@ for(const available of [true,false,null]){
   const question='Nabízíte náhradní vozidlo během opravy?';
   const result=await getReply(question,data,[],intake,undefined,false,async params=>{
    request=params;
-   return {status:'completed',output_text:JSON.stringify({safetyWarning:'',reply:'Dostupnost a cenu Vám potvrdí servis.',language:'cs',priceQuoted:false,partsAction:'keep',oilPriceMode:'none',oilPriceRequests:[],oilPriceFollowUp:'',keepClosedDay:false,needsClarification:false,statusFollowUp:'',intake,submissionAction:'none'})};
+   return {status:'completed',output_text:JSON.stringify({safetyWarning:'',reply:'Dostupnost a cenu Vám potvrdí servis.',language:'cs',priceQuoted:false,partsAction:'keep',tirePriceRequest: null, oilPriceMode:'none',oilPriceRequests:[],oilPriceFollowUp:'',keepClosedDay:false,needsClarification:false,statusFollowUp:'',intake,submissionAction:'none'})};
   });
   assert.equal(result.kind,'reply');
   const line=request.instructions.split('\n').find(line=>line.startsWith('Firemní data: '));
@@ -54,7 +54,7 @@ test('adding a replacement vehicle wish keeps repair context, vehicle and servic
  let request;
  const result=await getReply('A náhradní auto bych během opravy taky potřeboval.',company,history,initial,undefined,false,async params=>{
   request=params;
-  return {status:'completed',output_text:JSON.stringify({safetyWarning:'',reply:'Jasně, doplním zájem o náhradní vůz. Jak se jmenujete a na jakém telefonu Vás servis zastihne?',language:'cs',priceQuoted:false,partsAction:'keep',oilPriceMode:'none',oilPriceRequests:[],oilPriceFollowUp:'',keepClosedDay:false,needsClarification:false,statusFollowUp:'',intake:proposed,submissionAction:'none'})};
+  return {status:'completed',output_text:JSON.stringify({safetyWarning:'',reply:'Jasně, doplním zájem o náhradní vůz. Jak se jmenujete a na jakém telefonu Vás servis zastihne?',language:'cs',priceQuoted:false,partsAction:'keep',tirePriceRequest: null, oilPriceMode:'none',oilPriceRequests:[],oilPriceFollowUp:'',keepClosedDay:false,needsClarification:false,statusFollowUp:'',intake:proposed,submissionAction:'none'})};
  });
  assert.equal(result.kind,'reply');
  assert.deepEqual(request.input.slice(1,-1),history,'previous availability explanation and unanswered contact question reach the model');

@@ -1,7 +1,14 @@
 import { noStartGuide } from "./no-start.mjs";
 import { jerkingGuide } from "./jerking.mjs";
+import { tiresGuide } from "./tires.mjs";
 
 export const guideRegistry = Object.freeze({
+    tires: Object.freeze({
+    ...tiresGuide,
+    description:
+      "Přezutí pneumatik, výměna kompletních kol a související dotazy na počet kol, rozměr ráfků a cenu.",
+    serviceIds: Object.freeze(["tires"]),
+  }),
     jerkingDuringAcceleration: Object.freeze({
     ...jerkingGuide,
     description:

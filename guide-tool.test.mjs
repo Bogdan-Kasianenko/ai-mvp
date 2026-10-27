@@ -42,7 +42,7 @@ function answer(request, intake = emptyIntakeState(), extras = {}) {
   const data = {
     safetyWarning: "", reply: "Ozve se jedno cvaknutí, nebo více za sebou?",
     language: "cs", priceQuoted: false, partsAction: "keep",
-    oilPriceMode: "none", oilPriceRequests: [], oilPriceFollowUp: "",
+    tirePriceRequest: null, oilPriceMode: "none", oilPriceRequests: [], oilPriceFollowUp: "",
     keepClosedDay: false, needsClarification: false, statusFollowUp: "",
     intake, submissionAction: "none",
   };
@@ -126,7 +126,7 @@ for (const message of ["cvaka", "Suzuki Swift 2018", "ano", "Chci kontrolu start
         calls++;
         assert.ok(request.instructions.includes(noStartGuide.instructions));
         assert.equal(request.tool_choice, "auto");
-        assert.deepEqual(request.tools[0].parameters.properties.guideIds.items.enum, ["jerkingDuringAcceleration"]);
+        assert.deepEqual(request.tools[0].parameters.properties.guideIds.items.enum, Object.keys(guideRegistry).filter(id => id !== "noStart").sort());
         assert.deepEqual(request.text.format.schema.properties.guideActions.properties.noStart.enum, ["keep", "clear"]);
         assert.ok(request.text.format.schema.required.includes("guideActions"));
         return answer(request);
@@ -274,7 +274,7 @@ for (const action of ["keep", "clear"]) {
   test("price repair restores original schema and preserves guide decision: " + action, async () => {
     const requests = [];
     const quoted = {
-      oilPriceMode: "requested",
+      tirePriceRequest: null, oilPriceMode: "requested",
       oilPriceRequests: [{ optionId: "engine_oil", source: "compare" }],
       reply: "Cena je 400 Kč.", oilPriceFollowUp: "Má materiál zajistit servis?",
     };
@@ -298,7 +298,7 @@ for (const action of ["keep", "clear"]) {
 
 test("price repair after loading retains the function-call context", async () => {
   const requests = [];
-  const quoted = { oilPriceMode: "requested",
+  const quoted = { tirePriceRequest: null, oilPriceMode: "requested",
     oilPriceRequests: [{ optionId: "engine_oil", source: "compare" }],
     reply: "Cena je 400 Kč.", oilPriceFollowUp: "Má materiál zajistit servis?" };
   const result = await getReply("cenu", company, [], emptyIntakeState(), undefined, false, async request => {

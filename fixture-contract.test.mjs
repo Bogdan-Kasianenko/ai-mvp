@@ -36,7 +36,7 @@ test("the model response must contain a boolean keepClosedDay field", () => {
   
   const response = {
     partsAction: "keep",
-    oilPriceMode: "none",
+    tirePriceRequest: null, oilPriceMode: "none",
     oilPriceRequests: [],
     oilPriceFollowUp: "",
     safetyWarning: "",

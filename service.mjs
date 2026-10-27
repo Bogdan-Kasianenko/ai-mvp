@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { renderOilQuotes } from "./oil-quotes.mjs";
+import { renderTireQuote, resolveTireQuote } from "./tire-prices.mjs";
 import { normalizePartsOverrides } from "./parts-supply.mjs";
 import {
   intakeResponseSchema,
@@ -126,8 +127,12 @@ const contactChecks = {
   try {
     let parsed = JSON.parse(response.output_text);
     if (!validateModelResponse(parsed)) return { kind: "unavailable" };
-    const priceTextHasAmount = (value) => /\d[\d\s.,]*\s*(?:Kč|CZK)/i.test(value.reply + " " + value.oilPriceFollowUp);
-    const removeDuplicateFollowUp = (value) => {
+    const priceReplyNeedsRepair = (value) =>
+      /\d[\d\s.,]*\s*(?:Kč|CZK)/i.test(
+        value.reply + " " + value.oilPriceFollowUp,
+      ) ||
+      /[?？]/u.test(value.reply);
+      const removeDuplicateFollowUp = (value) => {
       const question = value.oilPriceFollowUp.trim();
       if (question && value.reply.trim().endsWith(question)) {
         value.reply = value.reply.trim().slice(0, -question.length).trim();
@@ -135,16 +140,29 @@ const contactChecks = {
         value.oilPriceFollowUp = "";
       }
     };
-    if (parsed.oilPriceMode !== "none") {
+        if (
+      parsed.oilPriceMode !== "none" ||
+      parsed.tirePriceRequest !== null
+    ) {
       removeDuplicateFollowUp(parsed);
-      if (priceTextHasAmount(parsed)) {
+      if (priceReplyNeedsRepair(parsed)) {
         const repaired = await createResponse({
           ...params,
-          instructions: params.instructions + "\nOPRAVA FORMÁTU CEN: V reply ani oilPriceFollowUp nesmí být žádná částka v Kč nebo CZK, ani oprava dřívější částky. Veškeré ceny oleje a filtrů vyjádři jen pomocí oilPriceRequests. Server vypočte tabulku. Zachovej odpověď na původní dotaz a správný výběr materiálu. Navazující otázku napiš jen jednou do oilPriceFollowUp.",
+        instructions: params.instructions + "\nOPRAVA FORMÁTU CEN: V reply ani oilPriceFollowUp neuváděj peněžní částky. Ceny oleje a filtrů vyjádři přes oilPriceRequests a oilPriceMode. Ceny přezutí a výměny kompletních kol vyjádři přes tirePriceRequest. Server vloží skutečné částky. Zachovej požadované porovnání, parametry kol, vybrané práce, dodání materiálu a původní dotaz. V reply ponech pouze krátkou reakci nebo vysvětlení bez otázky. Navazující otázku přesuň výhradně do oilPriceFollowUp; server ji zobrazí až za všemi cenovými tabulkami.",
         }, { signal });
         if (repaired?.status !== "completed") return { kind: "unavailable" };
         parsed = JSON.parse(repaired.output_text);
-        if (!validateModelResponse(parsed) || priceTextHasAmount(parsed)) return { kind: "unavailable" };
+                if (!validateModelResponse(parsed)) {
+          return { kind: "unavailable" };
+        }
+
+        const stillQuotingPrices =
+          parsed.oilPriceMode !== "none" ||
+          parsed.tirePriceRequest !== null;
+
+        if (stillQuotingPrices && priceReplyNeedsRepair(parsed)) {
+          return { kind: "unavailable" };
+        }
         removeDuplicateFollowUp(parsed);
       }
     }
@@ -164,7 +182,17 @@ const contactChecks = {
      parsed.intake = normalizeIntakeState(parsed.intake, company);
     const oilPrices = renderOilQuotes(company, parsed.intake, parsed.oilPriceRequests,
       parsed.oilPriceMode, serverContext.oilPriceMemory, parsed.language);
-    if (parsed.oilPriceMode !== "none" && /\d[\d\s.,]*\s*(?:Kč|CZK)/i.test(parsed.reply + " " + parsed.oilPriceFollowUp)) {
+        const tirePricesText = renderTireQuote(
+      company,
+      parsed.tirePriceRequest,
+      parsed.language,
+    );
+
+    if (
+      (parsed.oilPriceMode !== "none" ||
+        parsed.tirePriceRequest !== null) &&
+      priceReplyNeedsRepair(parsed)
+    ) {
       return { kind: "unavailable" };
     }
         return {
@@ -176,6 +204,7 @@ safetyWarning: parsed.safetyWarning.trim(),
          parsed.safetyWarning.trim(),
          parsed.reply.trim(),
          oilPrices.text,
+         tirePricesText,
          parsed.oilPriceFollowUp.trim(),
       ].filter(Boolean).join("\n\n"),
       oilPriceRecords: oilPrices.records,
@@ -184,7 +213,13 @@ safetyWarning: parsed.safetyWarning.trim(),
       statusFollowUp: parsed.statusFollowUp.trim(),
       submissionAction: parsed.submissionAction,
       language: parsed.language,
-      priceQuoted: parsed.oilPriceMode === "none" ? parsed.priceQuoted : oilPrices.records.length > 0,
+            priceQuoted:
+        oilPrices.records.length > 0 ||
+        (parsed.tirePriceRequest !== null &&
+          resolveTireQuote(company, parsed.tirePriceRequest).status === "ready") ||
+        (parsed.oilPriceMode === "none" &&
+          parsed.tirePriceRequest === null &&
+          parsed.priceQuoted),
       keepClosedDay: parsed.keepClosedDay,
     };
   } catch {

@@ -2,7 +2,11 @@ import { guideRegistry, normalizeGuideIds } from "./registry.mjs";
 
 const selectionRules = `
 VÝBĚR ODBORNÝCH GUIDES
-Podle významu rozhovoru načti přes load_guides všechny právě potřebné dostupné guides v jednom volání. Načtení není výběrem služby, změnou dodání dílů ani souhlasem s objednáním.
+Podle významu aktuální zprávy a kontextu rozhovoru načti přes load_guides všechny odpovídající dostupné guides v jednom volání ještě před odpovědí zákazníkovi. Guide služby použij již při jejím prvním projednávání nebo přidání k jiné práci, i když služba zatím není v selectedOperations a odpověď vypadá jednoduše.
+
+Pokud zákazník nově řeší přezutí pneumatik, výměnu kompletních kol nebo jejich cenu, načti dostupný guide tires před odpovědí i před položením upřesňující otázky. Platí to také při přidání pneumatik k již rozpracované výměně oleje. Již načtený guide znovu nevolej.
+
+Načtení není výběrem služby, změnou dodání dílů ani souhlasem s objednáním.
 Již načtené guides jsou v instrukcích; znovu je nenačítej. Krátká odpověď, doplnění vozidla a navazující odtah nebo kontrola stejné potíže zachovávají příslušný guide.
 V interním guideActions vrať keep pro guides potřebné k právě řešenému tématu. U dočasného guide vrať clear, když zákazník téma ukončí, odloží nebo přejde k jiné potíži, i když původní závada zůstává nevyřešená. Například „cukání teď neřešme“ znamená clear pro guide cukání. Ostatní právě potřebné guides zachovej.
 
@@ -75,7 +79,7 @@ export async function respondWithGuides({
     type: "function",
     name: "load_guides",
     description:
-      "Použij pouze tehdy, když potřebuješ podklady některého z těchto scénářů. Jinak rovnou odpověz. Dostupné guides: " +
+            "Před odpovědí načti všechny dostupné guides odpovídající právě řešenému tématu, včetně prvního dotazu nebo přidání služby k jiné práci. Vlastní znalost tématu nenahrazuje načtení guide. Pokud žádný dostupný guide neodpovídá tématu, rovnou odpověz. Dostupné guides: " +
       available.map(id => id + ": " + registry[id].description).join("; "),
     strict: true,
     parameters: {
@@ -134,7 +138,6 @@ export async function respondWithGuides({
       typeof args !== "object" ||
       Object.keys(args).length !== 1 ||
       !Array.isArray(args.guideIds) ||
-      !args.guideIds.length ||
       new Set(args.guideIds).size !== args.guideIds.length ||
       args.guideIds.some(id => !available.includes(id))
     ) {

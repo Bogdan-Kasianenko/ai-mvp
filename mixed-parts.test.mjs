@@ -91,7 +91,7 @@ test("the model receives operation-specific prices as well as both comparison bo
   let params;
   const result = await getReply("Test", company, [], state, undefined, false, async (request) => {
     params = request;
-    return { status: "completed", output_text: JSON.stringify({ safetyWarning: "", reply: "Děkuji.", language: "cs", priceQuoted: false, keepClosedDay: false, needsClarification: false, statusFollowUp: "", submissionAction: "none", intake: state, partsAction: "keep", oilPriceMode: "none", oilPriceRequests: [], oilPriceFollowUp: "" }) };
+    return { status: "completed", output_text: JSON.stringify({ safetyWarning: "", reply: "Děkuji.", language: "cs", priceQuoted: false, keepClosedDay: false, needsClarification: false, statusFollowUp: "", submissionAction: "none", intake: state, partsAction: "keep", tirePriceRequest: null, oilPriceMode: "none", oilPriceRequests: [], oilPriceFollowUp: "" }) };
   });
   assert.equal(result.kind, "reply");
   assert.ok(params.instructions.includes('"byOperation"'));

@@ -115,9 +115,32 @@ export const intakeResponseSchema = objectSchema({
       },
     }),
   },
+
+  tirePriceRequest: {
+    ...objectSchema({
+      optionId: {
+        type: "string",
+        enum: ["seasonal_tires", "wheel_swap"],
+      },
+      quantity: {
+        type: "number",
+        enum: [1, 2, 3, 4],
+      },
+      rimDiameter: { type: "number" },
+      material: {
+        type: "string",
+        enum: ["steel", "alu", "unknown"],
+      },
+    }),
+    type: ["object", "null"],
+    description:
+      "Required for any tire fitting or complete-wheel swap price, including comparisons and corrections. Supply known operation, quantity, rim diameter and material; unknown means the customer does not know the material or requests both prices. Server supplies all amounts. null when no tire price is being quoted or required details are missing.",
+  },
+
   oilPriceFollowUp: {
     type: "string",
-    description: "One follow-up question after the price table. Do not repeat it or paraphrase it in reply. No amounts.",
+        description:
+      "One follow-up question after all server-generated oil/filter and tire price tables. The legacy field name also applies to tire prices. Do not repeat the question in reply. No amounts.",
   },
   keepClosedDay: { type: "boolean" },
   needsClarification: { type: "boolean" },

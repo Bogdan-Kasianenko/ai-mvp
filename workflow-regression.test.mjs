@@ -315,7 +315,7 @@ function modelPayload() {
     priceQuoted: false,
     keepClosedDay: false,
     partsAction: "keep",
-    oilPriceMode: "none",
+    tirePriceRequest: null, oilPriceMode: "none",
     oilPriceRequests: [],
     oilPriceFollowUp: "",
     needsClarification: false,

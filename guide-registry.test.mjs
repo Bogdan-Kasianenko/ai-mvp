@@ -30,7 +30,7 @@ function params() {
 function answer(request, overrides = {}) {
   const data = {
     safetyWarning: "", reply: "Test reply", language: "cs", priceQuoted: false,
-    partsAction: "keep", oilPriceMode: "none", oilPriceRequests: [], oilPriceFollowUp: "",
+    partsAction: "keep", tirePriceRequest: null, oilPriceMode: "none", oilPriceRequests: [], oilPriceFollowUp: "",
     keepClosedDay: false, needsClarification: false, statusFollowUp: "",
     intake: emptyIntakeState(), submissionAction: "none",
   };
@@ -46,8 +46,8 @@ function tool(ids) {
   }] };
 }
 
-test("production registry enables noStart and jerking without binding either symptom to a booked service", () => {
-  assert.deepEqual(Object.keys(guideRegistry).sort(), ["jerkingDuringAcceleration", "noStart"]);
+test("production registry enables both symptoms and tires without binding symptoms to diagnostics or oil", () => {
+  assert.deepEqual(Object.keys(guideRegistry).sort(), ["jerkingDuringAcceleration", "noStart", "tires"]);
   assert.deepEqual(requiredGuideIds(["diagnostics:", "oil_filters:engine_oil"]), []);
 });
 
@@ -154,7 +154,7 @@ for (const [label, value] of [
 }
 
 for (const [label, ids] of [
-  ["empty batch", []], ["duplicate IDs", ["diagB", "diagB"]],
+  ["duplicate IDs", ["diagB", "diagB"]],
   ["already loaded", ["diagA"]], ["unknown ID", ["ghost"]],
   ["mixed known and unknown", ["diagB", "../.env"]],
 ]) {
@@ -251,3 +251,31 @@ test("old persisted session migrates during a real handler request, restores and
     assert.equal(calls, 2);
   } finally { repository.close(); }
 });
+
+for (const [label, activeGuides, requiredGuides] of [
+  ["no loaded guides", [], []],
+  ["temporary guide", ["diagA"], []],
+  ["temporary and required guide", ["diagA"], ["tires"]],
+]) {
+  test("empty load_guides batch continues safely: " + label, async () => {
+    let calls = 0;
+    const result = await respondWithGuides({
+      params: params(), registry, activeGuides, requiredGuides, instructionsForGuides,
+      createResponse: async request => {
+        calls++;
+        if (calls === 1) return tool([]);
+        assert.equal(calls, 2);
+        assert.deepEqual(request.tools, []);
+        assert.equal(request.tool_choice, "none");
+        const output = JSON.parse(request.input.at(-1).output);
+        assert.deepEqual(output.loadedGuideIds, []);
+        assert.deepEqual(output.activeGuideIds, [...activeGuides, ...requiredGuides].sort());
+        return answer(request);
+      },
+    });
+    assert.equal(calls, 2);
+    assert.ok(result.response);
+    assert.deepEqual(result.activeGuides, activeGuides);
+    assert.ok(!JSON.parse(result.response.output_text).guideActions);
+  });
+}

@@ -29,7 +29,7 @@ function answer(request, actions = {}) {
   const data = {
     safetyWarning: "", reply: "Běží motor nepravidelně i na volnoběh?",
     language: "cs", priceQuoted: false, partsAction: "keep",
-    oilPriceMode: "none", oilPriceRequests: [], oilPriceFollowUp: "",
+    tirePriceRequest: null, oilPriceMode: "none", oilPriceRequests: [], oilPriceFollowUp: "",
     keepClosedDay: false, needsClarification: false, statusFollowUp: "",
     intake, submissionAction: "none",
   };
@@ -78,7 +78,7 @@ for (const [from, to] of [["noStart", jerk], [jerk, "noStart"]]) {
     assert.equal(result.kind, "reply");
     assert.deepEqual(result.activeGuides, [to]);
     assert.equal(requests.length, 2);
-    assert.deepEqual(requests[0].tools[0].parameters.properties.guideIds.items.enum, [to]);
+    assert.deepEqual(requests[0].tools[0].parameters.properties.guideIds.items.enum, Object.keys(guideRegistry).filter(id => id !== from).sort());
     assert.deepEqual(sentCompany(requests[0]).symptomGuide[from], guideRegistry[from].knowledge);
     assert.equal(Object.hasOwn(sentCompany(requests[0]).symptomGuide, to), false);
     assert.deepEqual(Object.keys(requests[1].text.format.schema.properties.guideActions.properties), ids);
@@ -124,7 +124,7 @@ test("both real guides can load in one batch and only one can subsequently be cl
   const kept = await getReply("Startování už neřešme", company, [], loaded.intake,
     undefined, false, async request => {
       count++;
-      assert.deepEqual(request.tools, []);
+      assert.deepEqual(request.tools[0].parameters.properties.guideIds.items.enum, ["tires"]);
       return answer(request, { noStart: "clear", [jerk]: "keep" });
     }, false, { activeGuides: loaded.activeGuides });
   assert.equal(kept.kind, "reply");

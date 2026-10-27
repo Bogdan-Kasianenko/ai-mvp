@@ -12,7 +12,7 @@ function draft(source){
  return state;
 }
 async function reply(initial,proposed,action,message){
- return getReply(message,company,[],initial,undefined,false,async()=>({status:'completed',output_text:JSON.stringify({safetyWarning:'',reply:'Dodání materiálu upřesníme podle Vašeho přání.',language:'cs',priceQuoted:false,partsAction:action,oilPriceMode:'none',oilPriceRequests:[],oilPriceFollowUp:'',keepClosedDay:false,needsClarification:false,statusFollowUp:'',intake:proposed,submissionAction:'none'})}));
+ return getReply(message,company,[],initial,undefined,false,async()=>({status:'completed',output_text:JSON.stringify({safetyWarning:'',reply:'Dodání materiálu upřesníme podle Vašeho přání.',language:'cs',priceQuoted:false,partsAction:action,tirePriceRequest: null, oilPriceMode:'none',oilPriceRequests:[],oilPriceFollowUp:'',keepClosedDay:false,needsClarification:false,statusFollowUp:'',intake:proposed,submissionAction:'none'})}));
 }
 for(const source of [null,false,true]){
  test(`a hypothetical own-parts inquiry preserves the server's supplier choice ${source}`,async()=>{

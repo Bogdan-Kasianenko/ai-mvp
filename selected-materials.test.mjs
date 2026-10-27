@@ -65,7 +65,7 @@ test('legacy unknown scope retains suppliers until the list is reconstructed',()
 });
 test('service normalizes current scope before returning prices and intake',async()=>{
  const state=full();const intake=structuredClone(state);intake.partsOverrides.lpgFilter=true;
- const model={safetyWarning:'',reply:'Dobře.',language:'cs',priceQuoted:false,keepClosedDay:false,needsClarification:false,statusFollowUp:'',submissionAction:'none',intake,partsAction:'update',oilPriceMode:'requested',oilPriceRequests:[{optionId:'engine_oil',source:'selected'}],oilPriceFollowUp:''};
+ const model={safetyWarning:'',reply:'Dobře.',language:'cs',priceQuoted:false,keepClosedDay:false,needsClarification:false,statusFollowUp:'',submissionAction:'none',intake,partsAction:'update',tirePriceRequest: null, oilPriceMode:'requested',oilPriceRequests:[{optionId:'engine_oil',source:'selected'}],oilPriceFollowUp:''};
  const result=await getReply('Cena?',company,[],state,undefined,false,async()=>({status:'completed',output_text:JSON.stringify(model)}));
  assert.equal(result.kind,'reply');
  assert.equal(result.intake.partsOverrides.lpgFilter,null);
