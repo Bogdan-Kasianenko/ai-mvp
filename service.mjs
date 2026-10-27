@@ -11,6 +11,7 @@ import { getPriceBook, getPartsPriceBook } from "./pricing.mjs";
 import { buildInstructions } from "./instructions.mjs";
 import { appointmentContext } from "./appointment-calendar.mjs";
 import { inspectPhone, phoneInputContext, normalizePhone } from "./phone-contact.mjs";
+import { respondWithGuide } from "./guides/guide-tools.mjs";
 
 let client;
 export async function getReply(
@@ -54,26 +55,28 @@ const contactChecks = {
     timeZone: "Europe/Prague",
     dateStyle: "full",
   }).format(new Date());
+    const instructionsForGuide = activeGuide =>
+    buildInstructions({
+      company,
+      priceBooks,
+      currentPragueDate,
+      requestAlreadySent,
+      awaitingSendConfirmation,
+      includeNoStartGuide: activeGuide === "noStart",
+    }) +
+    "\nKALENDÁŘNÍ ÚDAJE VYPOČTENÉ SERVEREM (data):\n" +
+    JSON.stringify(
+      appointmentContext(
+        message,
+        intake,
+        serverContext.closedDayReview,
+        company,
+      ),
+    );
   const params = {
       model: "gpt-6-luna",
       reasoning: { effort: "none" },
-            instructions:
-        buildInstructions({
-          company,
-          priceBooks,
-          currentPragueDate,
-          requestAlreadySent,
-          awaitingSendConfirmation,
-        }) +
-        "\nKALENDÁŘNÍ ÚDAJE VYPOČTENÉ SERVEREM (data):\n" +
-        JSON.stringify(
-          appointmentContext(
-            message,
-            intake,
-            serverContext.closedDayReview,
-            company,
-          ),
-        ),
+      instructions: instructionsForGuide(serverContext.activeGuide),
       input: [
         {
           role: "user",
@@ -92,7 +95,19 @@ const contactChecks = {
       },
       store: false,
   };
-  const response = await createResponse(params, { signal });
+    const {
+    response,
+    activeGuide,
+    request: guideRequest,
+  } = await respondWithGuide({
+    params,
+    createResponse,
+    signal,
+    activeGuide: serverContext.activeGuide,
+    instructionsForGuide,
+  });
+
+  Object.assign(params, guideRequest);
   if (!response || response.status !== "completed")
     return { kind: "unavailable" };
   if (
@@ -147,8 +162,9 @@ const contactChecks = {
     if (parsed.oilPriceMode !== "none" && /\d[\d\s.,]*\s*(?:Kč|CZK)/i.test(parsed.reply + " " + parsed.oilPriceFollowUp)) {
       return { kind: "unavailable" };
     }
-    return {
+        return {
       kind: "reply",
+      activeGuide,
 safetyWarning: parsed.safetyWarning.trim(),
     text: [
          parsed.safetyWarning.trim(),

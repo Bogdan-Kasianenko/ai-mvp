@@ -7,6 +7,9 @@ import { emptyIntakeState } from "./intake.mjs";
 import { handleSendConfirmation } from "./request-flow.mjs";
 
 test("HTTP workflow: trusted collection, price detour, consent, status, reload and reset", async () => {
+  const appointment = new Date();
+  appointment.setUTCDate(appointment.getUTCDate() + 14 + ((8 - appointment.getUTCDay()) % 7));
+  const preferredTime = appointment.toISOString().slice(0, 10);
   const store = createChatSessionStore();
   let sent = 0,
     calls = 0;
@@ -22,7 +25,7 @@ test("HTTP workflow: trusted collection, price detour, consent, status, reload a
         customerParts: true,
         oilFilterScopeReviewed: true,
         additionalServicesReviewed: true,
-                preferredTime: "2026-10-26",
+                preferredTime: preferredTime,
       });
       Object.assign(intake.vehicle, {
         brand: "Suzuki",

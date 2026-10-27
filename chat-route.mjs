@@ -200,6 +200,7 @@ while (
         undefined,
         hasPendingConfirmation(session),
         {
+          activeGuide: session.activeGuide ?? null,
           priceMemory: session.priceMemory ?? [],
           oilPriceMemory: session.oilPriceMemory ?? [],
           closedDayReview: session.closedDayReview ?? null,
@@ -226,6 +227,13 @@ while (
         session.language = result.language;
       response.locals.language = session.language;
       const t = messages(session.language);
+            if (
+        result.activeGuide === "noStart" ||
+        result.activeGuide === null
+      ) {
+        session.activeGuide = result.activeGuide;
+      }
+
       const next = normalizeIntakeState(result.intake, company);
             const statusOnly =
         result.submissionAction === "ask_status" &&
@@ -403,6 +411,7 @@ export function createSessionHandler({
           history: [],
           pendingRequest: null,
           intake: emptyIntakeState(),
+          activeGuide: null,
           priceMemory: [],
           oilPriceMemory: [],
           closedDayReview: null,

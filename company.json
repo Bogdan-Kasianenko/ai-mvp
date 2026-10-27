@@ -44,6 +44,131 @@
     "openingHours": null,
     "serviceArea": null
   },
+
+  "symptomGuide": {
+    "noStart": {
+  "name": "Auto nestartuje",
+  "examples": [
+    "Auto nejde nastartovat",
+    "Při startování jen cvaká",
+    "Startér točí, ale motor nechytne",
+    "Po stisknutí startu se nic neděje"
+  ],
+  "scope": "Základní rozlišení pro spalovací vozidla. U elektromobilu nebo hybridu nejprve zjisti typ vozu a co se zobrazuje na přístrojové desce. Nepředpokládej běžný startér ani závadu spalovacího motoru.",
+  "firstQuestion": "Co se při pokusu o nastartování děje — motor se otáčí, slyšíte jen cvakání, nebo se vůbec nic neozve?",
+  "possibleCauses": [
+    {
+      "id": "low_voltage_supply",
+      "name": "Slabá 12V baterie nebo problém s elektrickým připojením",
+      "appliesWhen": "Motor se neotáčí nebo se otáčí nezvykle pomalu; zákazník popisuje rychlé opakované cvakání, pohasínání nebo nefunkční elektrické vybavení.",
+      "explanation": "Jednou z možností je slabá baterie nebo špatné elektrické připojení. Pro startování pak nemusí být k dispozici dost energie.",
+      "distinguishingQuestion": "Pohasíná při pokusu o nastartování přístrojová deska, nebo svítí stejně jako obvykle?",
+      "workshopCheck": "Ověření stavu a zatížitelnosti 12V baterie, připojení a podle výsledku také dobíjení.",
+      "limits": "Cvakání ani pohasínání samo neurčuje vadný díl. Nenavrhuj automatickou výměnu baterie. Normálně svítící kontrolky nevylučují problém s napájením."
+    },
+    {
+      "id": "starter_circuit",
+      "name": "Startér nebo jeho elektrický obvod",
+      "appliesWhen": "U spalovacího vozu se motor neotáčí. Zákazník může popsat jedno výrazné cvaknutí; stav baterie a napájení zatím nemusí být ověřený.",
+      "explanation": "Pokud se motor vůbec neotáčí, stojí za prověření také startér a jeho elektrický obvod. Jedno cvaknutí může tomuto směru odpovídat, ale podobně se může projevit i problém s napájením.",
+      "distinguishingQuestion": "Ozve se jedno cvaknutí, nebo několik rychlých cvaknutí za sebou?",
+      "workshopCheck": "Nejprve ověření napájení, potom elektrického obvodu a funkce startéru.",
+      "limits": "Neoznačuj startér za vadný jen podle zvuku. Nenaváděj zákazníka k propojování kontaktů nebo úderům do startéru."
+    },
+    {
+      "id": "key_authorization",
+      "name": "Nerozpoznaný klíč nebo blokování startu",
+      "appliesWhen": "Zákazník uvedl hlášení o nerozpoznaném klíči, imobilizéru nebo podobné upozornění.",
+      "explanation": "Pokud vůz hlásí nerozpoznaný klíč, může být start blokovaný kvůli jeho rozpoznání. Tato informace je užitečnější než automaticky předpokládat vybitou autobaterii.",
+      "distinguishingQuestion": "Jaké přesné hlášení nebo symbol se na přístrojové desce zobrazuje?",
+      "workshopCheck": "Postup podle návodu konkrétního vozu a kontrola klíče či systému autorizace startu.",
+      "limits": "Nevymýšlej univerzální místo pro přiložení klíče ani postup přeprogramování. Nezaměňuj baterii v klíči s 12V baterií vozidla."
+    },
+    {
+      "id": "cranks_without_starting",
+      "name": "Motor se otáčí, ale nenaskočí",
+      "appliesWhen": "Je potvrzen spalovací motor a zákazník říká, že jej startér otáčí, ale motor nezačne běžet.",
+      "explanation": "Když startér motor otáčí, je potřeba rozlišit například problém s přívodem paliva a u benzínového motoru také se zapalováním. Bez dalších projevů nelze vybrat konkrétní součást.",
+      "distinguishingQuestion": "Začalo to po tankování, nebo auto předtím normálně jelo a při dalším startu už nenaskočilo?",
+      "workshopCheck": "Podle typu motoru ověření přívodu paliva, případně zapalování a načtení závad včetně údajů při startování.",
+      "limits": "U dieselu nenavrhuj zapalovací svíčky ani cívky. Při záměně paliva přejdi na pravidla pro chybné tankování. Neoznačuj palivové čerpadlo ani jiný díl za potvrzenou příčinu."
+    }
+  ],
+  "safetyRules": [
+    "Při kouři, požáru, silném zápachu paliva nebo jiném bezprostředním nebezpečí mají přednost bezpečnostní pokyny.",
+    "Nedoporučuj opakované dlouhé pokusy o startování.",
+    "Nedávej univerzální návod na startování přes kabely bez znalosti konkrétního vozu a pokynů výrobce.",
+    "U hybridů a elektromobilů nenaváděj k manipulaci s vysokonapěťovou soustavou."
+  ],
+  "conversationRules": [
+    "Pokud zákazník již popsal, co se při startování děje, první otázku neopakuj.",
+    "Vyber jen hypotézy odpovídající skutečně známým projevům.",
+    "Vysvětli možnost a smysl další otázky; nevypisuj všechny varianty najednou.",
+    "Hypotézy nejsou potvrzené závady a neznamenají automatický výběr opravy."
+  ]
+},
+  "jerkingDuringAcceleration": {
+    "name": "Cukání při zrychlování",
+    "examples": [
+      "Auto cuká při přidání plynu",
+      "Při rozjezdu auto škube",
+      "Při zrychlování auto jede trhavě"
+    ],
+    "questionsByPriority": [
+      "Svítí nebo bliká při cukání nějaká kontrolka?",
+      "Cuká auto při plynulém přidávání plynu, nebo hlavně při rozjezdu či řazení?"
+    ],
+    "possibleCauses": [
+  {
+    "id": "ignition",
+    "name": "Vynechávání zapalování",
+    "appliesWhen": "Je potvrzen benzínový motor, případně motor na LPG nebo CNG se zapalovacími svíčkami. U hybridu pouze pokud se problém projevuje při chodu spalovacího motoru.",
+    "relevantClues": [
+      "Motor při zrychlování vynechává nebo běží nepravidelně.",
+      "Nepravidelný chod se může objevit také na volnoběh.",
+      "Mohou se přidat potíže se startováním."
+    ],
+    "explanation": "Jednou z možností je vynechávání zapalování, například kvůli svíčce nebo zapalovací cívce. Motor pak nemusí při přidávání plynu zabírat plynule.",
+    "distinguishingQuestion": "Běží motor nepravidelně také na volnoběh, nebo cuká jen při přidávání plynu?",
+    "workshopCheck": "Načtení závad, kontrola údajů o vynechávání a ověření zapalovací soustavy podle konkrétního motoru.",
+    "limits": "Podobné projevy mohou mít i jiné příčiny. Nepřítomnost kontrolky tuto možnost nepotvrzuje ani nevylučuje. Nenavrhuj automatickou výměnu svíček nebo cívek."
+  },
+  {
+    "id": "fuel_contamination",
+    "name": "Problém s kvalitou paliva",
+    "appliesWhen": "Je potvrzen benzínový nebo naftový motor a zákazník uvedl souvislost s nedávným tankováním.",
+    "relevantClues": [
+      "Potíže začaly krátce po tankování.",
+      "Přidalo se obtížné startování, nepravidelný volnoběh nebo zhasínání."
+    ],
+    "explanation": "Pokud potíže začaly po tankování, stojí za prověření také palivo. Znečištěné nebo nevhodné palivo může způsobovat nepravidelný chod a zaváhání při zrychlování.",
+    "distinguishingQuestion": "Začalo cukání až po posledním tankování, nebo se objevovalo už předtím?",
+    "workshopCheck": "Ověření souvislosti s tankováním a podle zjištění kontrola paliva a palivové soustavy.",
+    "limits": "Časová souvislost sama o sobě nedokazuje vadné palivo. Nedoporučuj naslepo aditiva ani ředění paliva. Při záměně paliva použij pravidla pro chybné tankování."
+  },
+  {
+    "id": "boost_system",
+    "name": "Netěsnost nebo jiná potíž v systému přeplňování",
+    "appliesWhen": "Je potvrzen motor s turbodmychadlem a kromě cukání zákazník popsal ztrátu výkonu, nové syčení nebo jiný relevantní doprovodný projev.",
+    "relevantClues": [
+      "Auto při zrychlování znatelně ztrácí výkon.",
+      "Při zátěži se ozývá nové syčení nebo neobvyklý zvuk.",
+      "Zákazník popsal také změnu kouřivosti."
+    ],
+    "explanation": "U tohoto motoru s turbem stojí za kontrolu také hadice a spoje systému přeplňování. Netěsnost může souviset se ztrátou výkonu a syčením; samo o sobě to neznamená vadné turbo.",
+    "distinguishingQuestion": "Ozývá se při zrychlování také nové syčení, nebo jste zaznamenal výrazný pokles výkonu?",
+    "workshopCheck": "Kontrola hadic, spojů a mezichladiče, podle potřeby zkouška těsnosti a porovnání požadovaného a skutečného plnicího tlaku.",
+    "limits": "Podobné projevy mohou mít i potíže s palivem nebo výfukovou soustavou. Turbo nepředpokládej podle samotné značky auta a nenavrhuj jeho výměnu bez ověření."
+  }
+],
+    "urgentSigns": [
+      "Blikající kontrolka motoru",
+      "Výrazná ztráta výkonu nebo opakované zhasínání",
+      "Kouř, zápach paliva nebo jiný zjevný projev nebezpečí"
+    ],
+    "nextStep": "Kontrola vozu a podle projevů diagnostika. Bez kontroly neurčovat konkrétní vadný díl ani nutnost jeho výměny."
+  }
+},
   "services": [
         {
       "id": "towing",
