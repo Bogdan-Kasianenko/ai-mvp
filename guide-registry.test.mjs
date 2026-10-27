@@ -46,8 +46,9 @@ function tool(ids) {
   }] };
 }
 
-test("production registry still enables only noStart; jerking remains a separate later step", () => {
-  assert.deepEqual(Object.keys(guideRegistry), ["noStart"]);
+test("production registry enables noStart and jerking without binding either symptom to a booked service", () => {
+  assert.deepEqual(Object.keys(guideRegistry).sort(), ["jerkingDuringAcceleration", "noStart"]);
+  assert.deepEqual(requiredGuideIds(["diagnostics:", "oil_filters:engine_oil"]), []);
 });
 
 test("guide normalization rejects unknown, inherited, path and non-string IDs and deduplicates", () => {

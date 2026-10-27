@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { respondWithGuides } from "./guides/guide-tools.mjs";
 import { noStartGuide } from "./guides/no-start.mjs";
+import { guideRegistry } from "./guides/registry.mjs";
 import { buildInstructions } from "./instructions.mjs";
 import { getReply } from "./service.mjs";
 import { emptyIntakeState, intakeResponseSchema, validateModelResponse } from "./intake.mjs";
@@ -59,7 +60,7 @@ test("disabled guide removes rules and knowledge without changing other company 
   const before = structuredClone(company);
   const text = instructionsForGuides([]);
   const expected = structuredClone(company);
-  delete expected.symptomGuide.noStart;
+  for (const id of Object.keys(guideRegistry)) delete expected.symptomGuide[id];
   assert.ok(!text.includes(noStartGuide.instructions));
   assert.deepEqual(sentCompany({ instructions: text }), expected);
   assert.deepEqual(company, before);
@@ -86,7 +87,7 @@ test("loading retains function linkage and reasoning, then requires keep/clear w
   assert.equal(requests.length, 2);
   assert.equal(requests[0].tool_choice, "auto");
   assert.equal(requests[0].parallel_tool_calls, false);
-  assert.deepEqual(requests[0].tools[0].parameters.properties.guideIds.items.enum, ["noStart"]);
+  assert.deepEqual(requests[0].tools[0].parameters.properties.guideIds.items.enum, Object.keys(guideRegistry).sort());
   assert.equal(requests[0].tools[0].strict, true);
   assert.equal(Object.hasOwn(sentCompany(requests[0]).symptomGuide, "noStart"), false);
   assert.equal(Object.hasOwn(requests[0].text.format.schema.properties, "guideActions"), false);
@@ -124,8 +125,8 @@ for (const message of ["cvaka", "Suzuki Swift 2018", "ano", "Chci kontrolu start
       createResponse: async request => {
         calls++;
         assert.ok(request.instructions.includes(noStartGuide.instructions));
-        assert.deepEqual(request.tools, []);
-        assert.equal(request.tool_choice, "none");
+        assert.equal(request.tool_choice, "auto");
+        assert.deepEqual(request.tools[0].parameters.properties.guideIds.items.enum, ["jerkingDuringAcceleration"]);
         assert.deepEqual(request.text.format.schema.properties.guideActions.properties.noStart.enum, ["keep", "clear"]);
         assert.ok(request.text.format.schema.required.includes("guideActions"));
         return answer(request);
@@ -322,9 +323,9 @@ test("required metadata and tool schemas do not leak between sessions or mutate 
       createResponse: async request => { captured = request; return answer(request); },
     });
     assert.equal(Object.hasOwn(captured.text.format.schema.properties, "guideActions"), activeGuide === "noStart");
-    assert.equal(captured.tool_choice, activeGuide ? "none" : "auto");
-    if (activeGuide) assert.deepEqual(captured.tools, []);
-    else assert.deepEqual(captured.tools[0].parameters.properties.guideIds.items.enum, ["noStart"]);
+    assert.equal(captured.tool_choice, "auto");
+    assert.deepEqual(captured.tools[0].parameters.properties.guideIds.items.enum,
+      Object.keys(guideRegistry).filter(id => id !== activeGuide).sort());
     assert.deepEqual(params, before);
   }
 });

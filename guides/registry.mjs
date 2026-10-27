@@ -1,6 +1,13 @@
 import { noStartGuide } from "./no-start.mjs";
+import { jerkingGuide } from "./jerking.mjs";
 
 export const guideRegistry = Object.freeze({
+    jerkingDuringAcceleration: Object.freeze({
+    ...jerkingGuide,
+    description:
+      "Cukání nebo škubání vozidla při zrychlování, přidávání plynu či rozjezdu.",
+    serviceIds: Object.freeze([]),
+  }),
   noStart: Object.freeze({
     ...noStartGuide,
     description:

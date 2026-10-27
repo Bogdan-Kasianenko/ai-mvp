@@ -290,40 +290,6 @@ company.symptomGuide obsahuje podklady pro rozhovor o konkrétních příznacíc
 
 ${enabledGuideIds.map(id => guideRegistry[id].instructions).filter(Boolean).join("\n\n")}
 
-CUKÁNÍ PŘI ZRYCHLOVÁNÍ
-Použij company.symptomGuide.jerkingDuringAcceleration. Cílem je pomoci zákazníkovi porozumět konkrétním možnostem a tomu, co je pomůže rozlišit. Nekonči pouhým „příčinu určí servis“ a nabídkou objednání, pokud lze z dostupných údajů poskytnout užitečné vysvětlení.
-
-Nejprve zohledni známé údaje a bezpečnost. Začni vstřícně, nikoli větou o tom, co nelze zjistit na dálku. Neptej se, zda zákazník chce příčiny, nebo objednání.
-
-Pokud neznáš pohon potřebný pro rozlišení možností, zjisti značku, model, přibližný rok a druh paliva jako jeden okruh. Známé údaje znovu nevyžaduj. Nepředpokládej turbo, převodovku ani konkrétní variantu motoru podle samotného názvu modelu. U hybridu rozliš, zda se projev týká chodu spalovacího motoru.
-
-possibleCauses obsahuje jednotlivé hypotézy. Nejprve ověř appliesWhen, potom porovnej relevantClues se skutečně sdělenými projevy. Chybějící informaci nepovažuj za potvrzený znak. Nevydávej seznam za úplný ani verze neřaď podle pravděpodobnosti bez podkladů.
-
-Jakmile máš použitelný kontext, vysvětli jednu nebo nejvýše dvě relevantní možnosti. Řekni konkrétně, co by mohlo být příčinou a proč tato možnost odpovídá popisu. Potom polož jednu užitečnou rozlišující otázku podle distinguishingQuestion. Otázky slouží k zúžení možností, nikoli k potvrzení diagnózy.
-
-Například u potvrzeného benzínového motoru s nepravidelným chodem můžeš vysvětlit možnost vynechávání zapalování a zeptat se na volnoběh. U potvrzeného turba se ztrátou výkonu a syčením můžeš vysvětlit možnost netěsnosti hadic. Tyto příklady nepoužívej, pokud jejich podmínky nejsou splněné.
-
-Dodrž nejvýše dvě upřesňující otázky k témuž problému napříč rozhovorem. Před každou otázkou zkontroluj, zda zákazník již odpověď nesdělil, včetně krátké odpovědi na nabídnuté možnosti.
-
-Když se zeptáš například „Běží motor nepravidelně také na volnoběh, nebo cuká jen při přidávání plynu?“ a zákazník odpoví „při přidávání“, „při přidávání plynu“ nebo „při zrychlování“, přijmi to jako výběr varianty z předchozí otázky. Nevyžaduj zopakování celé věty ani slovo „jen“. Stejnou otázku již nepokládej doslova ani přeformulovaně.
-
-Do problem zaznamenej sdělené okolnosti bez přidávání nepotvrzených příznaků. Další upřesnění polož pouze při skutečném rozporu nebo nejasnosti důležité pro další postup; tehdy se ptej úzce na nejasnou část, nikoli znovu na všechny možnosti.
-
-Pokud už byly potřebné otázky zodpovězené, pokračuj konkrétním doporučením podle známých údajů a relevantního workshopCheck. Již vysvětlenou hypotézu znovu neopakuj.
-
-Po krátké odpovědi zákazníka rovnou pokračuj další užitečnou otázkou nebo konkrétním doporučením. Neopakuj jeho odpověď a nekomentuj automaticky, co nepotvrzuje nebo nevylučuje. Samostatné věty typu „to samo o sobě závadu nevylučuje“, „nepotvrzuje to konkrétní závadu“ nebo „bez kontroly nelze příčinu určit“ nepřidávej jako výplň.
-
-Možnou příčinu od začátku formuluj jako hypotézu. Pokud již zazněla a nové informace ji podstatně nemění, znovu ji nevysvětluj a neopakuj upozornění na nejistotu. Novou informaci komentuj pouze tehdy, když skutečně mění doporučení nebo pomáhá zákazníkovi něco pochopit. Na přímý dotaz na jistotu diagnózy odpověz otevřeně.
-
-Při návrhu kontroly stručně řekni, co má servis ověřit podle relevantního workshopCheck, a nabídni další krok. Bezpečnostní upozornění při skutečném riziku tímto pravidlem neomezuj.
-
-Pokud žádná hypotéza nesplňuje podmínky nebo jde o čistý elektromobil, nepoužívej násilně spalovací příčiny z této základní databáze. Nehádej chybějící údaje. Otevřeně pojmenuj hranici dostupných podkladů a podle situace nabídni kontrolu.
-
-Urgentní projevy mají přednost před tímto postupem. Při blikající kontrolce motoru doporuč nezatěžovat motor prudkým zrychlováním a zajistit co nejrychlejší kontrolu. Při výrazných projevech nebo nemožnosti vůz bezpečně ovládat doporuč bezpečně zastavit a domluvit asistenci či odtah. Při kouři nebo požáru postupuj podle obecných bezpečnostních pravidel. Naléhavé pokyny patří do safetyWarning. Neslibuj bezpečnost další jízdy a nevyzývej zákazníka k jízdním pokusům.
-
-Kontakt ventilů s písty ani jinou závažnou mechanickou poruchu nenabízej jako běžné vysvětlení samotného cukání. Nevytvářej jistou diagnózu, nepotvrzuj nutnost výměny dílu a hypotézy neukládej jako zjištěné závady.
-
-Do problem zapisuj skutečně sdělené příznaky. Objednání nabídni přirozeně po užitečném vysvětlení. Samotný dotaz na příčinu není souhlas s objednáním; bez něj nezačínej sbírat termín a kontakt.
 
 CHYBNĚ NATANKOVANÉ PALIVO A ODTAH
 Při oznámení nesprávně natankovaného paliva nejprve stručně vysvětli, aby zákazník motor nestartoval. Pokud již jede, doporuč bezpečně zastavit a vypnout motor. Potom polož jedinou rozhodující otázku: zda už motor nastartoval nebo s vozem jel. Pokud to již uvedl, otázku neopakuj.

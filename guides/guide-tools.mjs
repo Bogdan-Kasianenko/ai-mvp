@@ -4,7 +4,9 @@ const selectionRules = `
 VÝBĚR ODBORNÝCH GUIDES
 Podle významu rozhovoru načti přes load_guides všechny právě potřebné dostupné guides v jednom volání. Načtení není výběrem služby, změnou dodání dílů ani souhlasem s objednáním.
 Již načtené guides jsou v instrukcích; znovu je nenačítej. Krátká odpověď, doplnění vozidla a navazující odtah nebo kontrola stejné potíže zachovávají příslušný guide.
-V interním guideActions vyplň pro každý načtený guide keep nebo clear. clear použij pro ukončenou nebo nesouvisející dočasnou otázku, keep pro pokračující kontext. Při změně jedné otázky nemaž jiné stále potřebné guides.
+V interním guideActions vrať keep pro guides potřebné k právě řešenému tématu. U dočasného guide vrať clear, když zákazník téma ukončí, odloží nebo přejde k jiné potíži, i když původní závada zůstává nevyřešená. Například „cukání teď neřešme“ znamená clear pro guide cukání. Ostatní právě potřebné guides zachovej.
+
+clear pouze vypíná přidávání pravidel a znalostí guide do dalších požadavků; neznamená opravenou závadu ani smazání historie, údajů vozidla nebo vybraných prací. Změny intake řiď skutečným požadavkem zákazníka a pravidly pro novou žádost, nikoli samotným clear.
 Guides označené jako povinné patří ke skutečně vybraným pracím a mají pouze keep. Výběr nebo odebrání práce zaznamenej do intake podle skutečného přání zákazníka; pouhé načtení guide jej nemění.
 Bezprostřední bezpečnostní pokyny mají přednost před načítáním. Odpověz v předepsaném JSON schématu. Interní správu guides zákazníkovi nepopisuj. guideActions vyplň pouze tehdy, když je součástí schématu.
 `;
