@@ -11,7 +11,8 @@ import { getPriceBook, getPartsPriceBook } from "./pricing.mjs";
 import { buildInstructions } from "./instructions.mjs";
 import { appointmentContext } from "./appointment-calendar.mjs";
 import { inspectPhone, phoneInputContext, normalizePhone } from "./phone-contact.mjs";
-import { respondWithGuide } from "./guides/guide-tools.mjs";
+import { respondWithGuides } from "./guides/guide-tools.mjs";
+import { readActiveGuideIds, requiredGuideIds } from "./guides/registry.mjs";
 
 let client;
 export async function getReply(
@@ -55,14 +56,17 @@ const contactChecks = {
     timeZone: "Europe/Prague",
     dateStyle: "full",
   }).format(new Date());
-    const instructionsForGuide = activeGuide =>
+  const activeGuideIds = readActiveGuideIds(serverContext);
+  const requiredGuides = requiredGuideIds(intake.selectedOperations);
+
+  const instructionsForGuides = activeGuides =>
     buildInstructions({
       company,
       priceBooks,
       currentPragueDate,
       requestAlreadySent,
       awaitingSendConfirmation,
-      includeNoStartGuide: activeGuide === "noStart",
+      activeGuides,
     }) +
     "\nKALENDÁŘNÍ ÚDAJE VYPOČTENÉ SERVEREM (data):\n" +
     JSON.stringify(
@@ -76,7 +80,7 @@ const contactChecks = {
   const params = {
       model: "gpt-6-luna",
       reasoning: { effort: "none" },
-      instructions: instructionsForGuide(serverContext.activeGuide),
+      instructions: instructionsForGuides([...requiredGuides, ...activeGuideIds]),
       input: [
         {
           role: "user",
@@ -97,14 +101,15 @@ const contactChecks = {
   };
     const {
     response,
-    activeGuide,
+    activeGuides,
     request: guideRequest,
-  } = await respondWithGuide({
+  } = await respondWithGuides({
     params,
     createResponse,
     signal,
-    activeGuide: serverContext.activeGuide,
-    instructionsForGuide,
+    activeGuides: activeGuideIds,
+    requiredGuides,
+    instructionsForGuides,
   });
 
   Object.assign(params, guideRequest);
@@ -164,7 +169,8 @@ const contactChecks = {
     }
         return {
       kind: "reply",
-      activeGuide,
+      activeGuides: activeGuides.filter(id =>
+        !requiredGuideIds(parsed.intake.selectedOperations).includes(id)),
 safetyWarning: parsed.safetyWarning.trim(),
     text: [
          parsed.safetyWarning.trim(),

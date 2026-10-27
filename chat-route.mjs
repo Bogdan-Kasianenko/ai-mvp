@@ -1,3 +1,4 @@
+import { readActiveGuideIds, normalizeGuideIds } from "./guides/registry.mjs";
 import { getReply } from "./service.mjs";
 import { APIConnectionTimeoutError, APIConnectionError, InternalServerError } from "openai";
 import { beginPendingChat, finishPendingChat, failPendingChat, chatSessionSnapshot, previousSentRequest } from "./pending-chat.mjs";
@@ -200,7 +201,7 @@ while (
         undefined,
         hasPendingConfirmation(session),
         {
-          activeGuide: session.activeGuide ?? null,
+          activeGuides: readActiveGuideIds(session),
           priceMemory: session.priceMemory ?? [],
           oilPriceMemory: session.oilPriceMemory ?? [],
           closedDayReview: session.closedDayReview ?? null,
@@ -227,11 +228,9 @@ while (
         session.language = result.language;
       response.locals.language = session.language;
       const t = messages(session.language);
-            if (
-        result.activeGuide === "noStart" ||
-        result.activeGuide === null
-      ) {
-        session.activeGuide = result.activeGuide;
+      if (Array.isArray(result.activeGuides)) {
+        session.activeGuides = normalizeGuideIds(result.activeGuides);
+        delete session.activeGuide;
       }
 
       const next = normalizeIntakeState(result.intake, company);
@@ -412,6 +411,7 @@ export function createSessionHandler({
           pendingRequest: null,
           intake: emptyIntakeState(),
           activeGuide: null,
+          activeGuides: [],
           priceMemory: [],
           oilPriceMemory: [],
           closedDayReview: null,

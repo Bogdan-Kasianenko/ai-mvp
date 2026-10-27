@@ -1,36 +1,19 @@
-const guideTool = {
-  type: "function",
-  name: "select_guide",
-  description:
-    "Tento nástroj použij pouze pro načtení guide noStart při potížích se startováním nebo uvedením vozu do stavu připraveného k jízdě. U ostatních témat rovnou odpověz bez volání nástroje.",
-  strict: true,
-  parameters: {
-    type: "object",
-    properties: {
-      guideId: {
-        type: "string",
-        enum: ["noStart"],
-      },
-    },
-    required: ["guideId"],
-    additionalProperties: false,
-  },
-};
+import { guideRegistry, normalizeGuideIds } from "./registry.mjs";
 
 const selectionRules = `
-VÝBĚR ODBORNÉHO GUIDE
-Pro potíže se startováním použij select_guide s guideId=noStart před odborným vysvětlením a otázkami tohoto scénáře, pokud guide ještě není aktivní. Rozhoduj podle významu rozhovoru, nikoli přesných slov.
-Pokud je guide aktivní, jeho pravidla a znalosti již máš. O jeho zachování rozhodni v interním poli guideAction: keep pro pokračování stejné potíže, clear pro ukončení nebo přechod k nesouvisejícímu tématu.
-Krátká odpověď na předchozí otázku, doplnění vozidla, odtah a objednání kontroly stejné potíže znamenají keep. Samostatný požadavek na jinou službu nebo výslovná změna tématu znamenají clear. Pouhý vedlejší informační dotaz nemusí původní potíž ukončit; rozhodni podle kontextu.
-Bezprostřední bezpečnostní pokyny mají přednost před načítáním guide. Načtení guide není objednávka, souhlas ani potvrzení diagnózy.
-Odpověz v předepsaném JSON schématu. Interní výběr guide zákazníkovi nepopisuj. guideAction vyplň pouze tehdy, když je součástí schématu.
+VÝBĚR ODBORNÝCH GUIDES
+Podle významu rozhovoru načti přes load_guides všechny právě potřebné dostupné guides v jednom volání. Načtení není výběrem služby, změnou dodání dílů ani souhlasem s objednáním.
+Již načtené guides jsou v instrukcích; znovu je nenačítej. Krátká odpověď, doplnění vozidla a navazující odtah nebo kontrola stejné potíže zachovávají příslušný guide.
+V interním guideActions vyplň pro každý načtený guide keep nebo clear. clear použij pro ukončenou nebo nesouvisející dočasnou otázku, keep pro pokračující kontext. Při změně jedné otázky nemaž jiné stále potřebné guides.
+Guides označené jako povinné patří ke skutečně vybraným pracím a mají pouze keep. Výběr nebo odebrání práce zaznamenej do intake podle skutečného přání zákazníka; pouhé načtení guide jej nemění.
+Bezprostřední bezpečnostní pokyny mají přednost před načítáním. Odpověz v předepsaném JSON schématu. Interní správu guides zákazníkovi nepopisuj. guideActions vyplň pouze tehdy, když je součástí schématu.
 `;
 
-function replyFormat(format, active) {
-  if (!active) return format;
+function replyFormat(format, loaded, required) {
+  if (!loaded.length) return format;
 
   if (format?.type !== "json_schema" || !format.schema) {
-    throw new Error("Active guide requires a JSON response schema");
+    throw new Error("Active guides require a JSON response schema");
   }
 
   return {
@@ -39,93 +22,131 @@ function replyFormat(format, active) {
       ...format.schema,
       properties: {
         ...format.schema.properties,
-        guideAction: {
-          type: "string",
-          enum: ["keep", "clear"],
-          description:
-            "keep: pokračování stejné potíže včetně krátkých odpovědí, odtahu a objednání její kontroly. clear: zákazník tuto potíž ukončil nebo přešel k nesouvisejícímu požadavku.",
+        guideActions: {
+          type: "object",
+          properties: Object.fromEntries(loaded.map(id => [
+            id,
+            {
+              type: "string",
+              enum: required.includes(id) ? ["keep"] : ["keep", "clear"],
+            },
+          ])),
+          required: loaded,
+          additionalProperties: false,
         },
       },
       required: [
-        ...format.schema.required.filter(
-          name => name !== "guideAction",
-        ),
-        "guideAction",
+        ...format.schema.required.filter(name => name !== "guideActions"),
+        "guideActions",
       ],
     },
   };
 }
 
-export async function respondWithGuide({
+export async function respondWithGuides({
   params,
   createResponse,
   signal,
-  activeGuide = null,
-  instructionsForGuide,
+  activeGuides = [],
+  requiredGuides = [],
+  instructionsForGuides,
+  registry = guideRegistry,
 }) {
-  let selected = activeGuide === "noStart" ? "noStart" : null;
+  const required = normalizeGuideIds(requiredGuides, registry);
+  let selected = normalizeGuideIds(activeGuides, registry)
+    .filter(id => !required.includes(id));
+
+  const loaded = () =>
+    normalizeGuideIds([...required, ...selected], registry);
 
   const instructions = () =>
-    instructionsForGuide(selected) +
+    instructionsForGuides(loaded()) +
     selectionRules +
-    "\nAktivní guide: " +
-    (selected ?? "none");
+    "\nNačtené guides: " + JSON.stringify(loaded()) +
+    "\nPovinné guides vybraných prací: " + JSON.stringify(required);
+
+  const available = Object.keys(registry)
+    .filter(id => !loaded().includes(id))
+    .sort();
+
+  const tools = available.length ? [{
+    type: "function",
+    name: "load_guides",
+    description:
+      "Použij pouze tehdy, když potřebuješ podklady některého z těchto scénářů. Jinak rovnou odpověz. Dostupné guides: " +
+      available.map(id => id + ": " + registry[id].description).join("; "),
+    strict: true,
+    parameters: {
+      type: "object",
+      properties: {
+        guideIds: {
+          type: "array",
+          items: { type: "string", enum: available },
+        },
+      },
+      required: ["guideIds"],
+      additionalProperties: false,
+    },
+  }] : [];
 
   let request = {
     ...params,
     instructions: instructions(),
     text: {
       ...params.text,
-      format: replyFormat(
-        params.text?.format,
-        selected === "noStart",
-      ),
+      format: replyFormat(params.text?.format, loaded(), required),
     },
-    tools: selected ? [] : [guideTool],
-    tool_choice: selected ? "none" : "auto",
+    tools,
+    tool_choice: tools.length ? "auto" : "none",
     parallel_tool_calls: false,
   };
 
+  const fail = () => ({
+    response: null,
+    activeGuides: [...selected],
+    request,
+  });
+
   let response = await createResponse(request, { signal });
-
   const calls =
-    response?.output?.filter(
-      item => item.type === "function_call",
-    ) ?? [];
+    response?.output?.filter(item => item.type === "function_call") ?? [];
 
-  if (response?.status === "completed" && calls.length > 0) {
+  if (response?.status === "completed" && calls.length) {
     const call = calls[0];
     let args;
 
     try {
       args = JSON.parse(call.arguments);
     } catch {
-      return { response: null, activeGuide: selected, request };
+      return fail();
     }
 
     if (
-      selected !== null ||
+      !tools.length ||
       calls.length !== 1 ||
-      call.name !== "select_guide" ||
+      call.name !== "load_guides" ||
       typeof call.call_id !== "string" ||
       !call.call_id ||
       !args ||
       Array.isArray(args) ||
       typeof args !== "object" ||
       Object.keys(args).length !== 1 ||
-      args.guideId !== "noStart"
+      !Array.isArray(args.guideIds) ||
+      !args.guideIds.length ||
+      new Set(args.guideIds).size !== args.guideIds.length ||
+      args.guideIds.some(id => !available.includes(id))
     ) {
-      return { response: null, activeGuide: selected, request };
+      return fail();
     }
 
-    selected = "noStart";
+    selected = normalizeGuideIds([...selected, ...args.guideIds], registry);
 
     request = {
       ...request,
       instructions: instructions(),
       text: {
         ...params.text,
-        format: replyFormat(params.text?.format, true),
+        format: replyFormat(params.text?.format, loaded(), required),
       },
       input: [
         ...request.input,
@@ -134,8 +155,8 @@ export async function respondWithGuide({
           type: "function_call_output",
           call_id: call.call_id,
           output: JSON.stringify({
-            activeGuide: selected,
-            status: "loaded",
+            loadedGuideIds: args.guideIds,
+            activeGuideIds: loaded(),
           }),
         },
       ],
@@ -145,56 +166,52 @@ export async function respondWithGuide({
 
     response = await createResponse(request, { signal });
 
-    if (
-      response?.output?.some(
-        item => item.type === "function_call",
-      )
-    ) {
-      return { response: null, activeGuide: selected, request };
+    if (response?.output?.some(item => item.type === "function_call")) {
+      return fail();
     }
   }
 
   const refused = response?.output?.some(
-    item =>
-      item.type === "message" &&
+    item => item.type === "message" &&
       item.content?.some(part => part.type === "refusal"),
   );
 
-  if (
-    response?.status === "completed" &&
-    selected === "noStart" &&
-    !refused
-  ) {
+  if (response?.status === "completed" && loaded().length && !refused) {
     let data;
 
     try {
       data = JSON.parse(response.output_text);
     } catch {
-      return { response: null, activeGuide: selected, request };
+      return fail();
     }
 
-    if (!data || !["keep", "clear"].includes(data.guideAction)) {
-      return { response: null, activeGuide: selected, request };
+    const actions = data?.guideActions;
+    const ids = loaded();
+
+    if (
+      !actions ||
+      typeof actions !== "object" ||
+      Array.isArray(actions) ||
+      Object.keys(actions).length !== ids.length ||
+      ids.some(id =>
+        !Object.hasOwn(actions, id) ||
+        !(required.includes(id) ? ["keep"] : ["keep", "clear"])
+          .includes(actions[id]))
+    ) {
+      return fail();
     }
 
-    if (data.guideAction === "clear") {
-      selected = null;
-    }
-
-    delete data.guideAction;
-
-    response = {
-      ...response,
-      output_text: JSON.stringify(data),
-    };
+    selected = selected.filter(id => actions[id] === "keep");
+    delete data.guideActions;
+    response = { ...response, output_text: JSON.stringify(data) };
   }
 
   return {
     response,
-    activeGuide: selected,
+    activeGuides: selected,
     request: {
       ...request,
-      instructions: instructionsForGuide(selected),
+      instructions: instructionsForGuides(loaded()),
       text: params.text,
       tools: [],
       tool_choice: "none",

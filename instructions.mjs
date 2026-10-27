@@ -1,4 +1,4 @@
-import { noStartGuide } from "./guides/no-start.mjs";
+import { guideRegistry, normalizeGuideIds } from "./guides/registry.mjs";
 
 export function buildInstructions({
   company,
@@ -6,16 +6,23 @@ export function buildInstructions({
   currentPragueDate,
   requestAlreadySent,
     awaitingSendConfirmation,
+  activeGuides,
   includeNoStartGuide = false,
 }) {
-  const symptomGuide = {
-    ...company.symptomGuide,
-  };
+  const enabledGuideIds = normalizeGuideIds(
+    activeGuides ?? (includeNoStartGuide ? ["noStart"] : []),
+  );
 
-  delete symptomGuide.noStart;
+  const symptomGuide = { ...company.symptomGuide };
 
-  if (includeNoStartGuide) {
-    symptomGuide.noStart = noStartGuide.knowledge;
+  for (const id of Object.keys(guideRegistry)) {
+    delete symptomGuide[id];
+  }
+
+  for (const id of enabledGuideIds) {
+    if (guideRegistry[id].knowledge !== undefined) {
+      symptomGuide[id] = guideRegistry[id].knowledge;
+    }
   }
 
   const companyForModel = {
@@ -281,7 +288,7 @@ FAQ A ZÁVADY
 BÁZE PŘÍZNAKŮ
 company.symptomGuide obsahuje podklady pro rozhovor o konkrétních příznacích. Vyber odpovídající záznam podle smyslu zákazníkovy zprávy, nejen podle přesného znění examples. Jde o vodítko pro upřesnění a další postup, nikoli o diagnózu nebo seznam automaticky objednaných oprav.
 
-${includeNoStartGuide ? noStartGuide.instructions : ""}
+${enabledGuideIds.map(id => guideRegistry[id].instructions).filter(Boolean).join("\n\n")}
 
 CUKÁNÍ PŘI ZRYCHLOVÁNÍ
 Použij company.symptomGuide.jerkingDuringAcceleration. Cílem je pomoci zákazníkovi porozumět konkrétním možnostem a tomu, co je pomůže rozlišit. Nekonči pouhým „příčinu určí servis“ a nabídkou objednání, pokud lze z dostupných údajů poskytnout užitečné vysvětlení.

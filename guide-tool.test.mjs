@@ -4,7 +4,7 @@ import { EventEmitter } from "node:events";
 import { readFileSync, mkdtempSync, existsSync, unlinkSync, rmdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { respondWithGuide } from "./guides/guide-tools.mjs";
+import { respondWithGuides } from "./guides/guide-tools.mjs";
 import { noStartGuide } from "./guides/no-start.mjs";
 import { buildInstructions } from "./instructions.mjs";
 import { getReply } from "./service.mjs";
@@ -14,10 +14,10 @@ import { createChatSessionStore } from "./chat-session.mjs";
 import { createRepository } from "./storage.mjs";
 
 const company = JSON.parse(readFileSync(new URL("./company.json", import.meta.url), "utf8"));
-const instructionsForGuide = id => buildInstructions({
+const instructionsForGuides = ids => buildInstructions({
   company, priceBooks: {}, currentPragueDate: "27. října 2026",
   requestAlreadySent: false, awaitingSendConfirmation: false,
-  includeNoStartGuide: id === "noStart",
+  activeGuides: ids,
 });
 function sentCompany(request) {
   return JSON.parse(request.instructions.split("\n").find(line =>
@@ -34,7 +34,7 @@ function baseParams(message = "Auto nestartuje") {
   };
 }
 function toolCall(guideId = "noStart", overrides = {}) {
-  return { type: "function_call", name: "select_guide", arguments: JSON.stringify({ guideId }), call_id: "guide-call-1", ...overrides };
+  return { type: "function_call", name: "load_guides", arguments: JSON.stringify({ guideIds: Array.isArray(guideId) ? guideId : [guideId] }), call_id: "guide-call-1", ...overrides };
 }
 const called = (...calls) => ({ status: "completed", output: calls });
 function answer(request, intake = emptyIntakeState(), extras = {}) {
@@ -45,14 +45,19 @@ function answer(request, intake = emptyIntakeState(), extras = {}) {
     keepClosedDay: false, needsClarification: false, statusFollowUp: "",
     intake, submissionAction: "none",
   };
-  if (request.text?.format?.schema?.properties?.guideAction) data.guideAction = "keep";
+  const actions = request.text?.format?.schema?.properties?.guideActions;
+  if (actions) {
+    data.guideActions = Object.fromEntries(
+      Object.keys(actions.properties).map(id => [id, "keep"]),
+    );
+  }
   Object.assign(data, extras);
   return { status: "completed", output: [], output_text: JSON.stringify(data) };
 }
 
 test("disabled guide removes rules and knowledge without changing other company data", () => {
   const before = structuredClone(company);
-  const text = instructionsForGuide(null);
+  const text = instructionsForGuides([]);
   const expected = structuredClone(company);
   delete expected.symptomGuide.noStart;
   assert.ok(!text.includes(noStartGuide.instructions));
@@ -61,7 +66,7 @@ test("disabled guide removes rules and knowledge without changing other company 
 });
 
 test("enabled guide includes original knowledge and exactly one copy of its rules", () => {
-  const text = instructionsForGuide("noStart");
+  const text = instructionsForGuides(["noStart"]);
   assert.equal(text.split(noStartGuide.instructions).length - 1, 1);
   assert.deepEqual(sentCompany({ instructions: text }).symptomGuide.noStart, noStartGuide.knowledge);
 });
@@ -71,8 +76,8 @@ test("loading retains function linkage and reasoning, then requires keep/clear w
   const params = baseParams();
   const before = structuredClone(params);
   const reasoning = { type: "reasoning", id: "rs-test", summary: [], encrypted_content: "test-encrypted" };
-  const result = await respondWithGuide({
-    params, instructionsForGuide,
+  const result = await respondWithGuides({
+    params, instructionsForGuides,
     createResponse: async request => {
       requests.push(structuredClone(request));
       return requests.length === 1 ? called(reasoning, toolCall()) : answer(request);
@@ -81,70 +86,70 @@ test("loading retains function linkage and reasoning, then requires keep/clear w
   assert.equal(requests.length, 2);
   assert.equal(requests[0].tool_choice, "auto");
   assert.equal(requests[0].parallel_tool_calls, false);
-  assert.deepEqual(requests[0].tools[0].parameters.properties.guideId.enum, ["noStart"]);
+  assert.deepEqual(requests[0].tools[0].parameters.properties.guideIds.items.enum, ["noStart"]);
   assert.equal(requests[0].tools[0].strict, true);
   assert.equal(Object.hasOwn(sentCompany(requests[0]).symptomGuide, "noStart"), false);
-  assert.equal(Object.hasOwn(requests[0].text.format.schema.properties, "guideAction"), false);
+  assert.equal(Object.hasOwn(requests[0].text.format.schema.properties, "guideActions"), false);
   assert.deepEqual(sentCompany(requests[1]).symptomGuide.noStart, noStartGuide.knowledge);
   assert.deepEqual(requests[1].input[1], reasoning);
   assert.equal(requests[1].input.at(-1).call_id, "guide-call-1");
   assert.equal(requests[1].tool_choice, "none");
   assert.deepEqual(requests[1].tools, []);
-  assert.ok(requests[1].text.format.schema.required.includes("guideAction"));
-  assert.equal(result.activeGuide, "noStart");
-  assert.equal(Object.hasOwn(JSON.parse(result.response.output_text), "guideAction"), false);
+  assert.ok(requests[1].text.format.schema.required.includes("guideActions"));
+  assert.deepEqual(result.activeGuides, ["noStart"]);
+  assert.equal(Object.hasOwn(JSON.parse(result.response.output_text), "guideActions"), false);
   assert.deepEqual(params, before);
 });
 
-test("ordinary oil request stays one model call without guide or guideAction", async () => {
+test("ordinary oil request stays one model call without guide or guideActions", async () => {
   let calls = 0;
-  const result = await respondWithGuide({
-    params: baseParams("Výměna oleje"), instructionsForGuide,
+  const result = await respondWithGuides({
+    params: baseParams("Výměna oleje"), instructionsForGuides,
     createResponse: async request => {
       calls++;
       assert.equal(Object.hasOwn(sentCompany(request).symptomGuide, "noStart"), false);
-      assert.equal(Object.hasOwn(request.text.format.schema.properties, "guideAction"), false);
+      assert.equal(Object.hasOwn(request.text.format.schema.properties, "guideActions"), false);
       return answer(request);
     },
   });
   assert.equal(calls, 1);
-  assert.equal(result.activeGuide, null);
+  assert.deepEqual(result.activeGuides, []);
 });
 
 for (const message of ["cvaka", "Suzuki Swift 2018", "ano", "Chci kontrolu startování", "Potřebuji odtah"]) {
   test("keep preserves guide for continuation in one call: " + message, async () => {
     let calls = 0;
-    const result = await respondWithGuide({
-      params: baseParams(message), activeGuide: "noStart", instructionsForGuide,
+    const result = await respondWithGuides({
+      params: baseParams(message), activeGuides: ["noStart"], instructionsForGuides,
       createResponse: async request => {
         calls++;
         assert.ok(request.instructions.includes(noStartGuide.instructions));
         assert.deepEqual(request.tools, []);
         assert.equal(request.tool_choice, "none");
-        assert.deepEqual(request.text.format.schema.properties.guideAction.enum, ["keep", "clear"]);
-        assert.ok(request.text.format.schema.required.includes("guideAction"));
+        assert.deepEqual(request.text.format.schema.properties.guideActions.properties.noStart.enum, ["keep", "clear"]);
+        assert.ok(request.text.format.schema.required.includes("guideActions"));
         return answer(request);
       },
     });
     assert.equal(calls, 1);
-    assert.equal(result.activeGuide, "noStart");
+    assert.deepEqual(result.activeGuides, ["noStart"]);
     assert.ok(validateModelResponse(JSON.parse(result.response.output_text)));
   });
 }
 
 test("clear removes guide from subsequent requests in one call without exposing metadata", async () => {
   let calls = 0;
-  const result = await respondWithGuide({
-    params: baseParams("Jiný dotaz: výměna oleje"), activeGuide: "noStart", instructionsForGuide,
+  const result = await respondWithGuides({
+    params: baseParams("Jiný dotaz: výměna oleje"), activeGuides: ["noStart"], instructionsForGuides,
     createResponse: async request => {
       calls++;
-      return answer(request, undefined, { guideAction: "clear" });
+      return answer(request, undefined, { guideActions: { noStart: "clear" } });
     },
   });
   assert.equal(calls, 1);
-  assert.equal(result.activeGuide, null);
+  assert.deepEqual(result.activeGuides, []);
   assert.ok(validateModelResponse(JSON.parse(result.response.output_text)));
-  assert.equal(Object.hasOwn(JSON.parse(result.response.output_text), "guideAction"), false);
+  assert.equal(Object.hasOwn(JSON.parse(result.response.output_text), "guideActions"), false);
   assert.equal(Object.hasOwn(sentCompany(result.request).symptomGuide, "noStart"), false);
   assert.ok(!result.request.instructions.includes(noStartGuide.instructions));
 });
@@ -152,7 +157,7 @@ test("clear removes guide from subsequent requests in one call without exposing 
 for (const [label, invalid] of [
   ["unknown function", toolCall("noStart", { name: "read_file" })],
   ["arbitrary path", toolCall("../.env")],
-  ["extra property", toolCall("noStart", { arguments: '{"guideId":"noStart","path":".env"}' })],
+  ["extra property", toolCall("noStart", { arguments: '{"guideIds":["noStart"],"path":".env"}' })],
   ["malformed JSON", toolCall("noStart", { arguments: "{" })],
   ["null arguments", toolCall("noStart", { arguments: "null" })],
   ["array arguments", toolCall("noStart", { arguments: '["noStart"]' })],
@@ -161,34 +166,34 @@ for (const [label, invalid] of [
 ]) {
   test("invalid tool request is rejected without a second call: " + label, async () => {
     let calls = 0;
-    const result = await respondWithGuide({
-      params: baseParams(), instructionsForGuide,
+    const result = await respondWithGuides({
+      params: baseParams(), instructionsForGuides,
       createResponse: async () => { calls++; return called(invalid); },
     });
     assert.equal(result.response, null);
-    assert.equal(result.activeGuide, null);
+    assert.deepEqual(result.activeGuides, []);
     assert.equal(calls, 1);
   });
 }
 
 test("multiple tool calls cannot partially change selection", async () => {
   let calls = 0;
-  const result = await respondWithGuide({
-    params: baseParams(), instructionsForGuide,
+  const result = await respondWithGuides({
+    params: baseParams(), instructionsForGuides,
     createResponse: async () => {
       calls++;
       return called(toolCall(), toolCall("none", { call_id: "second" }));
     },
   });
   assert.equal(result.response, null);
-  assert.equal(result.activeGuide, null);
+  assert.deepEqual(result.activeGuides, []);
   assert.equal(calls, 1);
 });
 
 test("a second function call after loading cannot loop", async () => {
   let calls = 0;
-  const result = await respondWithGuide({
-    params: baseParams(), instructionsForGuide,
+  const result = await respondWithGuides({
+    params: baseParams(), instructionsForGuides,
     createResponse: async () => { calls++; return called(toolCall()); },
   });
   assert.equal(result.response, null);
@@ -197,35 +202,35 @@ test("a second function call after loading cannot loop", async () => {
 
 test("an active guide cannot call the loading tool again", async () => {
   let calls = 0;
-  const result = await respondWithGuide({
-    params: baseParams("cvaka"), activeGuide: "noStart", instructionsForGuide,
+  const result = await respondWithGuides({
+    params: baseParams("cvaka"), activeGuides: ["noStart"], instructionsForGuides,
     createResponse: async () => { calls++; return called(toolCall()); },
   });
   assert.equal(result.response, null);
-  assert.equal(result.activeGuide, "noStart");
+  assert.deepEqual(result.activeGuides, ["noStart"]);
   assert.equal(calls, 1);
 });
 
 for (const action of [undefined, null, true, "", "none", "unexpected"]) {
-  test("missing or invalid guideAction is rejected without clearing stored state: " + String(action), async () => {
-    const result = await respondWithGuide({
-      params: baseParams("cvaka"), activeGuide: "noStart", instructionsForGuide,
-      createResponse: async request => answer(request, undefined, { guideAction: action }),
+  test("missing or invalid guideActions is rejected without clearing stored state: " + String(action), async () => {
+    const result = await respondWithGuides({
+      params: baseParams("cvaka"), activeGuides: ["noStart"], instructionsForGuides,
+      createResponse: async request => answer(request, undefined, { guideActions: action }),
     });
     assert.equal(result.response, null);
-    assert.equal(result.activeGuide, "noStart");
+    assert.deepEqual(result.activeGuides, ["noStart"]);
   });
 }
 
 test("incomplete response does not execute a tool or require a guide decision", async () => {
   for (const activeGuide of [null, "noStart"]) {
     let calls = 0;
-    const result = await respondWithGuide({
-      params: baseParams(), activeGuide, instructionsForGuide,
+    const result = await respondWithGuides({
+      params: baseParams(), activeGuides: activeGuide ? [activeGuide] : [], instructionsForGuides,
       createResponse: async () => { calls++; return { status: "incomplete", output: [] }; },
     });
     assert.equal(calls, 1);
-    assert.equal(result.activeGuide, activeGuide);
+    assert.deepEqual(result.activeGuides, activeGuide ? [activeGuide] : []);
   }
 });
 
@@ -241,8 +246,8 @@ test("refusal bypasses guide metadata parsing and remains a refusal in getReply"
 test("same abort signal reaches both requests and timeout propagates", async () => {
   const controller = new AbortController();
   let calls = 0;
-  await assert.rejects(() => respondWithGuide({
-    params: baseParams(), instructionsForGuide, signal: controller.signal,
+  await assert.rejects(() => respondWithGuides({
+    params: baseParams(), instructionsForGuides, signal: controller.signal,
     createResponse: async (_request, options) => {
       assert.equal(options.signal, controller.signal);
       if (++calls === 1) return called(toolCall());
@@ -257,10 +262,10 @@ test("getReply loads guide and strips internal decision before validating the no
   const result = await getReply("Auto nejde nastartovat", company, [], emptyIntakeState(),
     undefined, false, async request => ++calls === 1 ? called(toolCall()) : answer(request));
   assert.equal(result.kind, "reply");
-  assert.equal(result.activeGuide, "noStart");
+  assert.deepEqual(result.activeGuides, ["noStart"]);
   assert.equal(result.submissionAction, "none");
   assert.match(result.text, /cvaknutí/);
-  assert.ok(!result.text.includes("guideAction"));
+  assert.ok(!result.text.includes("guideActions"));
   assert.equal(calls, 2);
 });
 
@@ -275,15 +280,15 @@ for (const action of ["keep", "clear"]) {
     const result = await getReply("A kolik stojí výměna oleje?", company, [], emptyIntakeState(),
       undefined, false, async request => {
         requests.push(structuredClone(request));
-        if (requests.length === 1) return answer(request, undefined, { ...quoted, guideAction: action });
+        if (requests.length === 1) return answer(request, undefined, { ...quoted, guideActions: { noStart: action } });
         return answer(request, undefined, { ...quoted, reply: "Cena práce závisí na dodání materiálu." });
       }, false, { activeGuide: "noStart" });
     assert.equal(result.kind, "reply");
-    assert.equal(result.activeGuide, action === "keep" ? "noStart" : null);
+    assert.deepEqual(result.activeGuides, action === "keep" ? ["noStart"] : []);
     assert.equal(requests.length, 2);
     assert.equal(requests[1].tool_choice, "none");
     assert.deepEqual(requests[1].text.format.schema, intakeResponseSchema);
-    assert.equal(Object.hasOwn(requests[1].text.format.schema.properties, "guideAction"), false);
+    assert.equal(Object.hasOwn(requests[1].text.format.schema.properties, "guideActions"), false);
     assert.equal(requests[1].instructions.includes(noStartGuide.instructions), action === "keep");
     assert.match(result.text, /400 Kč/);
     assert.match(result.text, /500 Kč/);
@@ -301,7 +306,7 @@ test("price repair after loading retains the function-call context", async () =>
     return answer(request, undefined, requests.length === 2 ? quoted : { ...quoted, reply: "Cena závisí na materiálu." });
   });
   assert.equal(result.kind, "reply");
-  assert.equal(result.activeGuide, "noStart");
+  assert.deepEqual(result.activeGuides, ["noStart"]);
   assert.equal(requests.length, 3);
   assert.ok(requests[2].input.some(item => item.type === "function_call_output"));
   assert.deepEqual(requests[2].text.format.schema, intakeResponseSchema);
@@ -312,14 +317,14 @@ test("required metadata and tool schemas do not leak between sessions or mutate 
   const before = structuredClone(params);
   for (const activeGuide of [null, "noStart", null, "noStart"]) {
     let captured;
-    await respondWithGuide({
-      params, activeGuide, instructionsForGuide,
+    await respondWithGuides({
+      params, activeGuides: activeGuide ? [activeGuide] : [], instructionsForGuides,
       createResponse: async request => { captured = request; return answer(request); },
     });
-    assert.equal(Object.hasOwn(captured.text.format.schema.properties, "guideAction"), activeGuide === "noStart");
+    assert.equal(Object.hasOwn(captured.text.format.schema.properties, "guideActions"), activeGuide === "noStart");
     assert.equal(captured.tool_choice, activeGuide ? "none" : "auto");
     if (activeGuide) assert.deepEqual(captured.tools, []);
-    else assert.deepEqual(captured.tools[0].parameters.properties.guideId.enum, ["noStart"]);
+    else assert.deepEqual(captured.tools[0].parameters.properties.guideIds.items.enum, ["noStart"]);
     assert.deepEqual(params, before);
   }
 });
@@ -360,7 +365,7 @@ test("keep survives page reload and cvaka while new sessions and chat reset stay
     let store = createChatSessionStore({ repository });
     const first = store({ headers: {}, ip: "guide-tests" }, response());
     await loadGuide(store, first.id);
-    assert.equal(repository.load(first.id).activeGuide, "noStart");
+    assert.deepEqual(repository.load(first.id).activeGuides, ["noStart"]);
     store = createChatSessionStore({ repository });
     const view = response();
     createSessionHandler({ getSession: store })({ headers: { cookie: "caro_session=" + first.id } }, view);
@@ -371,9 +376,9 @@ test("keep survives page reload and cvaka while new sessions and chat reset stay
     }), first.id, "cvaka");
     assert.equal(requests.length, 1);
     assert.ok(requests[0].instructions.includes(noStartGuide.instructions));
-    assert.equal(repository.load(first.id).activeGuide, "noStart");
-    assert.ok(!JSON.stringify(continued.body).includes("guideAction"));
-    assert.ok(!JSON.stringify(repository.load(first.id).history).includes("guideAction"));
+    assert.deepEqual(repository.load(first.id).activeGuides, ["noStart"]);
+    assert.ok(!JSON.stringify(continued.body).includes("guideActions"));
+    assert.ok(!JSON.stringify(repository.load(first.id).history).includes("guideActions"));
 
     const other = store({ headers: {}, ip: "guide-tests" }, response());
     let isolated;
@@ -383,11 +388,11 @@ test("keep survives page reload and cvaka while new sessions and chat reset stay
     createSessionHandler({ getSession: store, reset: true })({
       headers: { cookie: "caro_session=" + first.id }, body: {},
     }, response());
-    assert.equal(repository.load(first.id).activeGuide, null);
+    assert.deepEqual(repository.load(first.id).activeGuides, []);
     let afterReset;
     await chat(makeHandler(store, async request => { afterReset = request; return answer(request); }), first.id, "Dobrý den");
     assert.equal(Object.hasOwn(sentCompany(afterReset).symptomGuide, "noStart"), false);
-    assert.equal(Object.hasOwn(afterReset.text.format.schema.properties, "guideAction"), false);
+    assert.equal(Object.hasOwn(afterReset.text.format.schema.properties, "guideActions"), false);
   } finally { repository.close(); }
 });
 
@@ -413,7 +418,7 @@ test("guide survives closing SQLite with the original issue outside the model hi
     assert.equal(requests.length, 1);
     assert.ok(requests[0].instructions.includes(noStartGuide.instructions));
     assert.ok(!requests[0].input.some(item => item.content === "Auto nestartuje"));
-    assert.equal(repository.load(first.id).activeGuide, "noStart");
+    assert.deepEqual(repository.load(first.id).activeGuides, ["noStart"]);
   } finally {
     repository.close();
     for (const name of ["sessions.sqlite", "sessions.sqlite-wal", "sessions.sqlite-shm"]) {
@@ -432,17 +437,19 @@ test("clear is persisted and the next request omits guide; browser fields cannot
     await loadGuide(store, first.id);
     let calls = 0;
     await chat(makeHandler(store, async request => {
-      calls++; return answer(request, undefined, { guideAction: "clear" });
+      calls++; return answer(request, undefined, { guideActions: { noStart: "clear" } });
     }), first.id, "Jiný dotaz: výměna oleje");
     assert.equal(calls, 1);
-    assert.equal(repository.load(first.id).activeGuide, null);
+    assert.deepEqual(repository.load(first.id).activeGuides, []);
     store = createChatSessionStore({ repository });
     let request;
     await chat(makeHandler(store, async params => { request = params; return answer(params); }), first.id, "Dobrý den", {
-      activeGuide: "noStart", serverContext: { activeGuide: "noStart" }, guideAction: "keep",
+      activeGuide: "noStart", activeGuides: ["noStart"],
+      serverContext: { activeGuide: "noStart", activeGuides: ["noStart"] },
+      guideActions: { noStart: "keep" },
     });
     assert.equal(Object.hasOwn(sentCompany(request).symptomGuide, "noStart"), false);
-    assert.equal(Object.hasOwn(request.text.format.schema.properties, "guideAction"), false);
+    assert.equal(Object.hasOwn(request.text.format.schema.properties, "guideActions"), false);
   } finally { repository.close(); }
 });
 
@@ -453,8 +460,8 @@ test("invalid guide decision cannot clear persisted state or become a customer r
     const first = store({ headers: {}, ip: "guide-tests" }, response());
     await loadGuide(store, first.id);
     await chat(makeHandler(store, async request =>
-      answer(request, undefined, { guideAction: "invalid" })), first.id, "cvaka", {}, 502);
-    assert.equal(repository.load(first.id).activeGuide, "noStart");
-    assert.ok(!JSON.stringify(repository.load(first.id).history).includes("guideAction"));
+      answer(request, undefined, { guideActions: "invalid" })), first.id, "cvaka", {}, 502);
+    assert.deepEqual(repository.load(first.id).activeGuides, ["noStart"]);
+    assert.ok(!JSON.stringify(repository.load(first.id).history).includes("guideActions"));
   } finally { repository.close(); }
 });
