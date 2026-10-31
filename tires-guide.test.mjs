@@ -28,12 +28,13 @@ function draft(includeTires = true) {
   });
   Object.assign(state.vehicle, { brand: "Suzuki", model: "Swift", year: "2018", engine: "1,3 l", fuel: "benzín" });
   Object.assign(state.customer, { name: "Test", email: "test@example.com" });
+  if(includeTires) state.tires={optionId:"seasonal_tires",quantity:2,rimDiameter:16,material:"unknown"};
   return state;
 }
 function answer(request, next, actions = {}) {
   const data = {
-    safetyWarning: "", reply: "Jaký průměr mají ráfky?",
-    language: "cs", priceQuoted: false, partsAction: "keep",
+    safetyWarning: "", reply: next.pendingDetails.length ? "Jaký průměr mají ráfky?" : "Dobře.",
+    language: "cs", priceQuoted: false, replyLead: "", tireUpdate: {reset:false,fields:["optionId","quantity","rimDiameter","material"]}, operationsAction: "replace", vehicleAction: "keep", vehicleFields: [], partsAction: "keep",
     tirePriceRequest: null, oilPriceMode: "none", oilPriceRequests: [], oilPriceFollowUp: "",
     keepClosedDay: false, needsClarification: false, statusFollowUp: "",
     intake: structuredClone(next), submissionAction: "none",
@@ -49,13 +50,13 @@ function tool(ids) {
   }] };
 }
 
-test("tires is a service guide and all tire operations bind it without binding oil alone", () => {
+test("oil and tire operations bind their own guides independently", () => {
   assert.equal(guideRegistry.tires.instructions, tiresGuide.instructions);
   for (const option of ["seasonal_tires", "wheel_swap", "tread_check"]) {
     assert.deepEqual(requiredGuideIds(["tires:" + option]), ["tires"]);
   }
-  assert.deepEqual(requiredGuideIds(["oil_filters:engine_oil"]), []);
-  assert.deepEqual(requiredGuideIds(["oil_filters:engine_oil", "tires:seasonal_tires"]), ["tires"]);
+  assert.deepEqual(requiredGuideIds(["oil_filters:engine_oil"]), ["oilFilters"]);
+  assert.deepEqual(requiredGuideIds(["oil_filters:engine_oil", "tires:seasonal_tires"]), ["oilFilters", "tires"]);
 });
 
 for (const activeGuides of [[], ["tires"], ["noStart", "tires"]]) {
@@ -217,10 +218,11 @@ test("adding tires after oil keeps the request open until diameter is answered, 
     const first = store({ headers: {}, ip: "tires-test" }, response());
     first.intake = draft(false); first.persist();
     const pending = draft();
+    pending.tires.rimDiameter=null;
     pending.pendingDetails = ["tires.rimDiameter"];
     let calls = 0;
     const added = await chat(handlerFor(store, async request =>
-      ++calls === 1 ? tool(["tires"]) : answer(request, pending)), first.id, "Přidejte dvě přední pneumatiky");
+      ++calls === 1 ? tool(["tires"]) : answer(request, pending)), first.id, "Přidejte dvě přední pneumatiky, materiál ráfků neznám");
     assert.equal(calls, 2);
     assert.equal(added.body.confirmationToken, null);
     assert.doesNotMatch(added.body.reply, /Zkontrolujte prosím žádost/);

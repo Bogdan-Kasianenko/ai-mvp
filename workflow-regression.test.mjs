@@ -1,3 +1,4 @@
+import { withGuideActions } from "./test-helpers/model-response.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
@@ -314,7 +315,7 @@ function modelPayload() {
     language: "cs",
     priceQuoted: false,
     keepClosedDay: false,
-    partsAction: "keep",
+    replyLead: "", tireUpdate: {reset:false,fields:[]}, operationsAction: "replace", vehicleAction: "keep", vehicleFields: [], partsAction: "keep",
     tirePriceRequest: null, oilPriceMode: "none",
     oilPriceRequests: [],
     oilPriceFollowUp: "",
@@ -353,7 +354,7 @@ test("both price books, Prague date and durable price memory reach the model wit
       params = p;
       return {
         status: "completed",
-        output_text: JSON.stringify(modelPayload()),
+        output_text: JSON.stringify(withGuideActions(p, modelPayload())),
       };
     },
     false,
@@ -401,7 +402,7 @@ test("runtime schema requires a string safetyWarning and accepts a safety-only r
 });
 test("service preserves safetyWarning separately and includes it once in the reply",async()=>{
  const payload=modelPayload();payload.safetyWarning="Nepokračujte v jízdě.";
- const result=await getReply("Test",company,[],full(),undefined,false,async()=>({status:"completed",output_text:JSON.stringify(payload)}));
+ const result=await getReply("Test",company,[],full(),undefined,false,async request=>({status:"completed",output_text:JSON.stringify(withGuideActions(request, payload))}));
  assert.equal(result.kind,"reply");
  assert.equal(result.safetyWarning,payload.safetyWarning);
  assert.equal(result.text,payload.safetyWarning+"\n\n"+payload.reply);

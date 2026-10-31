@@ -1253,6 +1253,7 @@ function renderAssistantText(container, text) {
       const headers = cells(lines[index]);
       const wrapper = document.createElement("div");
       wrapper.className = "chat-price-table";
+      wrapper.dataset.columns = String(headers.length);
 
       const table = document.createElement("table");
       const head = document.createElement("thead");

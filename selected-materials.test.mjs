@@ -1,3 +1,4 @@
+import { withGuideActions } from "./test-helpers/model-response.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -65,8 +66,8 @@ test('legacy unknown scope retains suppliers until the list is reconstructed',()
 });
 test('service normalizes current scope before returning prices and intake',async()=>{
  const state=full();const intake=structuredClone(state);intake.partsOverrides.lpgFilter=true;
- const model={safetyWarning:'',reply:'Dobře.',language:'cs',priceQuoted:false,keepClosedDay:false,needsClarification:false,statusFollowUp:'',submissionAction:'none',intake,partsAction:'update',tirePriceRequest: null, oilPriceMode:'requested',oilPriceRequests:[{optionId:'engine_oil',source:'selected'}],oilPriceFollowUp:''};
- const result=await getReply('Cena?',company,[],state,undefined,false,async()=>({status:'completed',output_text:JSON.stringify(model)}));
+ const model={safetyWarning:'',reply:'Dobře.',language:'cs',priceQuoted:false,keepClosedDay:false,needsClarification:false,statusFollowUp:'',submissionAction:'none',intake,replyLead: "", tireUpdate: {reset:false,fields:[]}, operationsAction: "replace", vehicleAction: "keep", vehicleFields: [], partsAction:'update',tirePriceRequest: null, oilPriceMode:'requested',oilPriceRequests:[{optionId:'engine_oil',source:'selected'}],oilPriceFollowUp:''};
+ const result=await getReply('Cena?',company,[],state,undefined,false,async request=>({status:'completed',output_text:JSON.stringify(withGuideActions(request, model))}));
  assert.equal(result.kind,'reply');
  assert.equal(result.intake.partsOverrides.lpgFilter,null);
  assert.equal(result.oilPriceRecords[0].variants[0].priceFromKc,400);

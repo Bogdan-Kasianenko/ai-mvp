@@ -65,10 +65,26 @@ export function appointmentContext(message, intake, review, company, now = new D
   let partial = false;
   const short = String(message).trim().match(/^(\d{1,2})(?:\s*[.,/]\s*(\d{1,2}))?\.?$/);
   if (!date && short) {
-    const parts = new Intl.DateTimeFormat("en", { timeZone: "Europe/Prague", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
-    const get = (name) => parts.find((part) => part.type === name).value;
-    const base = readAppointmentDate(intake.preferredTime) ?? review?.date ?? `${get("year")}-${get("month")}-${get("day")}`;
-    date = readAppointmentDate(`${short[1]}.${short[2] ?? base.slice(5, 7)}.${base.slice(0, 4)}`);
+    const today = pragueToday(now);
+    const previousDate = readAppointmentDate(intake.preferredTime) ?? review?.date;
+    const base = previousDate && previousDate >= today ? previousDate : today;
+    if (short[2]) {
+      date = readAppointmentDate(`${short[1]}.${short[2]}.${base.slice(0, 4)}`);
+    } else {
+      // A day without a month means its nearest future occurrence.
+      const year = Number(base.slice(0, 4));
+      const month = Number(base.slice(5, 7));
+      for (let offset = 0; offset <= 12; offset++) {
+        const first = new Date(Date.UTC(year, month - 1 + offset, 1));
+        const candidate = readAppointmentDate(
+          `${short[1]}.${first.getUTCMonth() + 1}.${first.getUTCFullYear()}`,
+        );
+        if (candidate && candidate >= today) {
+          date = candidate;
+          break;
+        }
+      }
+    }
     partial = true;
   }
   return {
@@ -78,6 +94,22 @@ export function appointmentContext(message, intake, review, company, now = new D
     currentPreference: appointmentDay(readAppointmentDate(intake.preferredTime), company),
     pendingClosedDate: appointmentDay(review?.date, company),
   };
+}
+
+export function partialDateQuestion(iso, language = "cs") {
+  const locales = { cs: "cs-CZ", sk: "sk-SK", en: "en-GB", ru: "ru-RU", uk: "uk-UA", de: "de-DE" };
+  const date = new Intl.DateTimeFormat(locales[language] ?? "en-GB", {
+    timeZone: "UTC", day: "numeric", month: "long", year: "numeric",
+  }).format(new Date(`${iso}T12:00:00Z`));
+  const questions = {
+    cs: `Myslíte ${date}?`,
+    sk: `Myslíte ${date}?`,
+    en: `Do you mean ${date}?`,
+    ru: `Вы имеете в виду ${date}?`,
+    uk: `Ви маєте на увазі ${date}?`,
+    de: `Meinen Sie den ${date}?`,
+  };
+  return questions[language] ?? questions.en;
 }
 
 export function reviewAppointment({ previous, next, message, company, review, keepClosedDay = false, now = new Date() }) {

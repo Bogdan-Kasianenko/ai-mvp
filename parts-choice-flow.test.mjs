@@ -1,3 +1,4 @@
+import { withGuideActions } from "./test-helpers/model-response.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -12,7 +13,7 @@ function draft(source){
  return state;
 }
 async function reply(initial,proposed,action,message){
- return getReply(message,company,[],initial,undefined,false,async()=>({status:'completed',output_text:JSON.stringify({safetyWarning:'',reply:'Dodání materiálu upřesníme podle Vašeho přání.',language:'cs',priceQuoted:false,partsAction:action,tirePriceRequest: null, oilPriceMode:'none',oilPriceRequests:[],oilPriceFollowUp:'',keepClosedDay:false,needsClarification:false,statusFollowUp:'',intake:proposed,submissionAction:'none'})}));
+ return getReply(message,company,[],initial,undefined,false,async request=>({status:'completed',output_text:JSON.stringify(withGuideActions(request, {safetyWarning:'',reply:'Dodání materiálu upřesníme podle Vašeho přání.',language:'cs',priceQuoted:false,replyLead: "", tireUpdate: {reset:false,fields:[]}, operationsAction: "replace", vehicleAction: "keep", vehicleFields: [], partsAction:action,tirePriceRequest: null, oilPriceMode:'none',oilPriceRequests:[],oilPriceFollowUp:'',keepClosedDay:false,needsClarification:false,statusFollowUp:'',intake:proposed,submissionAction:'none'}))}));
 }
 for(const source of [null,false,true]){
  test(`a hypothetical own-parts inquiry preserves the server's supplier choice ${source}`,async()=>{

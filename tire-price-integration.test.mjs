@@ -1,3 +1,4 @@
+import { renderAutomaticOilQuotes } from "./oil-quotes.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -10,16 +11,22 @@ function state() {
   const intake = emptyIntakeState();
   Object.assign(intake, { intent: "service_request", selectedOperations: ["oil_filters:engine_oil", "tires:seasonal_tires"], customerParts: false, oilFilterScopeReviewed: true });
   Object.assign(intake.vehicle, { brand: "Suzuki", model: "Swift", year: "2018", engine: "1,3 l", fuel: "benzín" });
+  intake.tires = {optionId:"seasonal_tires",quantity:2,rimDiameter:16,material:"unknown"};
   return intake;
 }
 function data(overrides = {}) {
-  return {
+  const value = {
     safetyWarning: "", reply: "Jasně.", language: "cs", priceQuoted: false,
-    partsAction: "keep", oilPriceMode: "none", oilPriceRequests: [],
+    replyLead: "", tireUpdate: {reset:false,fields:[]}, operationsAction: "replace", vehicleAction: "keep", vehicleFields: [], partsAction: "keep", oilPriceMode: "none", oilPriceRequests: [],
     tirePriceRequest: quote(), oilPriceFollowUp: "Jaký termín Vám vyhovuje?",
     keepClosedDay: false, needsClarification: false, statusFollowUp: "",
     intake: state(), submissionAction: "none", ...overrides,
   };
+  if(value.tirePriceRequest && !Object.hasOwn(overrides,"intake")){
+    value.intake.tires = {...value.tirePriceRequest};
+    value.tireUpdate = {reset:false,fields:["optionId","quantity","rimDiameter","material"]};
+  }
+  return value;
 }
 function response(request, value) {
   const actions = request.text.format.schema.properties.guideActions?.properties;
@@ -27,10 +34,12 @@ function response(request, value) {
   if (actions) copy.guideActions = Object.fromEntries(Object.keys(actions).map(id => [id, "keep"]));
   return { status: "completed", output: [], output_text: JSON.stringify(copy) };
 }
+// Tire-focused fixtures assume the unchanged oil labor price was already shown.
 async function reply(value, initial = state()) {
   let calls = 0;
   const result = await getReply("Kolik stojí přezutí?", company, [], initial, undefined, false,
-    async request => { calls++; return response(request, value); });
+    async request => { calls++; return response(request, value); }, false,
+    { oilPriceMemory: renderAutomaticOilQuotes(company, initial).records });
   return { result, calls };
 }
 
@@ -144,25 +153,21 @@ test("complete-wheel table uses the swap tariff and preserves fractional totals"
   assert.equal(renderTireQuote(company, null), "");
 });
 
+
 for (const [label, earlyQuestion, extra] of [
   ["Czech", "Jaká je značka a model auta?", {}],
   ["English", "What is the make and model?", { language: "en" }],
   ["full-width question mark", "Jaká je značka auta？", {}],
   ["oil plus tires", "Jaký termín Vám vyhovuje?", { oilPriceMode: "requested", oilPriceRequests: [{ optionId: "engine_oil", source: "selected" }] }],
 ]) {
-  test("question before price table is repaired and placed after all prices: " + label, async () => {
+  test("server places reply questions after prices without another model call: " + label, async () => {
     let calls = 0;
     const initial = state();
-    const result = await getReply("Přezutí dvou pneumatik, 16 palců, materiál nevím", company, [], initial, undefined, false, async request => {
-      calls++;
-      if (calls === 1) return response(request, data({ ...extra, reply: "Materiál upřesní servis. " + earlyQuestion, oilPriceFollowUp: "" }));
-      assert.equal(calls, 2);
-      assert.deepEqual(request.tools, []);
-      assert.equal(request.tool_choice, "none");
-      assert.match(request.instructions, /Navazující otázku přesuň výhradně do oilPriceFollowUp/);
-      return response(request, data({ ...extra, reply: "Materiál upřesní servis.", oilPriceFollowUp: earlyQuestion }));
+    const result = await getReply("Cenu přezutí", company, [], initial, undefined, false, async request => {
+      calls++; assert.equal(calls, 1, "A question alone must not trigger a format repair");
+      return response(request, data({ ...extra, reply: "Materiál upřesní servis. " + earlyQuestion, oilPriceFollowUp: "" }));
     });
-    assert.equal(calls, 2); assert.equal(result.kind, "reply");
+    assert.equal(calls, 1); assert.equal(result.kind, "reply");
     assert.equal(result.text.split(earlyQuestion).length - 1, 1);
     assert.ok(result.text.indexOf(earlyQuestion) > result.text.lastIndexOf("800 Kč"));
     if (extra.oilPriceMode) assert.ok(result.text.indexOf(earlyQuestion) > result.text.indexOf("400 Kč"));
@@ -178,22 +183,18 @@ test("duplicate question suffix is moved below prices without another API reques
   assert.ok(result.text.indexOf(question) > result.text.indexOf("800 Kč"));
 });
 
-test("conflicting follow-up questions are replaced with one corrected question after prices", async () => {
-  let calls = 0;
-  const result = await getReply("Cenu přezutí", company, [], state(), undefined, false, async request => {
-    calls++;
-    return response(request, calls === 1
-      ? data({ reply: "Jaká je značka vozu?", oilPriceFollowUp: "Jaký termín Vám vyhovuje?" })
-      : data({ reply: "Jasně.", oilPriceFollowUp: "Jaká je značka vozu?" }));
-  });
-  assert.equal(calls, 2); assert.equal(result.kind, "reply");
+
+test("conflicting follow-ups keep one question after prices without an API retry", async () => {
+  const { result, calls } = await reply(data({ reply: "Jaká je značka vozu?", oilPriceFollowUp: "Jaký termín Vám vyhovuje?" }));
+  assert.equal(calls, 1); assert.equal(result.kind, "reply");
   assert.equal((result.text.match(/\?/g) ?? []).length, 1);
   assert.ok(result.text.indexOf("Jaká je značka") > result.text.indexOf("800 Kč"));
 });
 
-test("unrepaired question before prices is refused after one repair attempt", async () => {
+test("a question left in reply cannot cause an unavailable response merely due to its location", async () => {
   const { result, calls } = await reply(data({ reply: "Jaká je značka vozu?", oilPriceFollowUp: "" }));
-  assert.equal(calls, 2); assert.equal(result.kind, "unavailable");
+  assert.equal(calls, 1); assert.equal(result.kind, "reply");
+  assert.ok(result.text.indexOf("Jaká je značka") > result.text.indexOf("800 Kč"));
 });
 
 test("ordinary questions without server price requests do not trigger a repair", async () => {
@@ -214,16 +215,35 @@ test("urgent safety questions remain before prices without triggering a formatti
 test("format repair may cancel a premature tire quote and return an ordinary material question", async () => {
   let calls = 0;
   const question = "Jsou ráfky plechové, nebo hliníkové?";
-  const next = state(); next.pendingDetails = ["tires.rimMaterial"];
-  const result = await getReply("16", company, [], state(), undefined, false, async request => {
+  const initial=state(); initial.tires.material="unanswered";
+  const next = structuredClone(initial); next.pendingDetails = ["tires.rimMaterial"];
+  const result = await getReply("16", company, [], initial, undefined, false, async request => {
     calls++;
     return response(request, calls === 1
-      ? data({ reply: question, oilPriceFollowUp: "", intake: next })
+      ? data({ reply: "Cena je 725 Kč. " + question, oilPriceFollowUp: "", intake: next })
       : data({ reply: question, tirePriceRequest: null, oilPriceFollowUp: "", intake: next }));
-  });
+  }, false, { oilPriceMemory: renderAutomaticOilQuotes(company, state()).records });
   assert.equal(calls, 2);
   assert.equal(result.kind, "reply", "A normal question without any remaining price request must not be rejected by the pricing guard");
   assert.equal(result.text, question);
   assert.equal(result.priceQuoted, false);
   assert.deepEqual(result.intake.pendingDetails, ["tires.rimMaterial"]);
+});
+
+
+test("an imperative follow-up without a question mark is also placed after the tables", async () => {
+  const request = "Ještě prosím uveďte své jméno.";
+  const { result, calls } = await reply(data({ reply: "Dobře. " + request, oilPriceFollowUp: "" }));
+  assert.equal(result.kind, "reply"); assert.equal(calls, 1);
+  assert.ok(result.text.indexOf(request) > result.text.indexOf("800 Kč"));
+});
+
+test("combined prices precede reply text while urgent safety advice stays first", async () => {
+  const { result, calls } = await reply(data({
+    safetyWarning: "Zůstaňte mimo vozovku.", reply: "Jaké jméno mám uvést?", oilPriceFollowUp: "",
+    oilPriceMode: "requested", oilPriceRequests: [{ optionId: "engine_oil", source: "selected" }],
+  }));
+  assert.equal(result.kind, "reply"); assert.equal(calls, 1);
+  assert.ok(result.text.startsWith("Zůstaňte mimo vozovku."));
+  for (const amount of ["400 Kč", "725 Kč", "800 Kč"]) assert.ok(result.text.indexOf(amount) < result.text.indexOf("Jaké jméno"));
 });

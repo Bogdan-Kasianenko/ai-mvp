@@ -9,7 +9,7 @@ import { noStartGuide } from "./guides/no-start.mjs";
 import { guideRegistry } from "./guides/registry.mjs";
 import { buildInstructions } from "./instructions.mjs";
 import { getReply } from "./service.mjs";
-import { emptyIntakeState, intakeResponseSchema, validateModelResponse } from "./intake.mjs";
+import { emptyIntakeState, intakeResponseSchema, createIntakeResponseSchema, validateModelResponse } from "./intake.mjs";
 import { createChatHandler, createSessionHandler } from "./chat-route.mjs";
 import { createChatSessionStore } from "./chat-session.mjs";
 import { createRepository } from "./storage.mjs";
@@ -41,7 +41,7 @@ const called = (...calls) => ({ status: "completed", output: calls });
 function answer(request, intake = emptyIntakeState(), extras = {}) {
   const data = {
     safetyWarning: "", reply: "Ozve se jedno cvaknutí, nebo více za sebou?",
-    language: "cs", priceQuoted: false, partsAction: "keep",
+    language: "cs", priceQuoted: false, replyLead: "", tireUpdate: {reset:false,fields:[]}, operationsAction: "replace", vehicleAction: "keep", vehicleFields: [], partsAction: "keep",
     tirePriceRequest: null, oilPriceMode: "none", oilPriceRequests: [], oilPriceFollowUp: "",
     keepClosedDay: false, needsClarification: false, statusFollowUp: "",
     intake, submissionAction: "none",
@@ -288,7 +288,7 @@ for (const action of ["keep", "clear"]) {
     assert.deepEqual(result.activeGuides, action === "keep" ? ["noStart"] : []);
     assert.equal(requests.length, 2);
     assert.equal(requests[1].tool_choice, "none");
-    assert.deepEqual(requests[1].text.format.schema, intakeResponseSchema);
+    assert.deepEqual(requests[1].text.format.schema, createIntakeResponseSchema(company));
     assert.equal(Object.hasOwn(requests[1].text.format.schema.properties, "guideActions"), false);
     assert.equal(requests[1].instructions.includes(noStartGuide.instructions), action === "keep");
     assert.match(result.text, /400 Kč/);
@@ -310,7 +310,7 @@ test("price repair after loading retains the function-call context", async () =>
   assert.deepEqual(result.activeGuides, ["noStart"]);
   assert.equal(requests.length, 3);
   assert.ok(requests[2].input.some(item => item.type === "function_call_output"));
-  assert.deepEqual(requests[2].text.format.schema, intakeResponseSchema);
+  assert.deepEqual(requests[2].text.format.schema, createIntakeResponseSchema(company));
 });
 
 test("required metadata and tool schemas do not leak between sessions or mutate original params", async () => {

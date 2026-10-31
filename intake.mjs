@@ -9,6 +9,12 @@ import {
   operationRequiresParts,
 } from "./parts-supply.mjs";
 import { inspectPhone, normalizePhone } from "./phone-contact.mjs";
+import {
+  emptyTireDetails,
+  normalizeTireDetails,
+  hasTireWork,
+  missingTireDetails,
+} from "./tire-details.mjs";
 
 const nullableText = { type: ["string", "null"] };
 
@@ -46,6 +52,26 @@ const intakeSchema = objectSchema({
     items: { type: "string" },
     description: "Complete CURRENT list of selected operations as serviceId:optionId from company.services. For a service without options use serviceId:. Exclude declined/removed work. Use other for an unlisted operation. null means not yet reconstructed; [] means no work selected.",
   },
+
+    tires: objectSchema({
+    optionId: {
+      type: ["string", "null"],
+      enum: ["seasonal_tires", "wheel_swap", null],
+    },
+    quantity: {
+      type: ["number", "null"],
+      enum: [1, 2, 3, 4, null],
+    },
+    rimDiameter: {
+      type: ["number", "null"],
+    },
+    material: {
+      type: "string",
+      enum: ["unanswered", "steel", "alu", "unknown"],
+      description:
+        "unanswered means the material has not been clarified. unknown means the customer explicitly said they do not know, declined to identify it or requested both variants. Missing information alone is unanswered, never unknown.",
+    },
+  }),
   customerParts: { type: ["boolean", "null"] },
   partsOverrides: objectSchema(Object.fromEntries(
     partKeys.map((key) => [key, { type: ["boolean", "null"] }]),
@@ -84,18 +110,55 @@ const intakeSchema = objectSchema({
   skipped: { type: "array", items: { type: "string", enum: skippedFields } },
 });
 
+export const vehicleFieldNames = [
+  "brand",
+  "model",
+  "year",
+  "engine",
+  "fuel",
+  "mileage",
+  "windshieldSensors",
+];
+
 export const intakeResponseSchema = objectSchema({
     safetyWarning: {
     type: "string",
     description: "All immediate safety advice and urgent safety questions, in the customer language. Empty when not needed. Never put booking, contact collection or prices here. Do not repeat this content in reply.",
   },
+      replyLead: {
+    type: "string",
+    description:
+      "Short natural opening reaction to the customer's latest message. For a standalone informational tire quote, briefly introduce the server price table only when tirePriceRequest is non-null. While gathering missing tire details, do not announce a price table. The server displays this before the price intro and tables. No questions, requests for information, safety instructions or monetary amounts. Outside price responses, empty when no separate reaction is useful. Never repeat it in reply.",
+  },
   reply: {
     type: "string",
-    description: "When oilPriceMode is requested or automatic: a short natural reaction without currency amounts, without announcing the price table, and without a follow-up question. Put that question only in oilPriceFollowUp.",
+    description:
+      "Main answer or useful explanation, displayed after any server price tables. Put the short opening reaction in replyLead. With server prices, put the single follow-up question or request for information in oilPriceFollowUp. Without server prices, the main answer and follow-up may be here. Empty when other response fields are sufficient.",
   },
   language: { type: "string", enum: ["cs", "sk", "en", "ru", "uk", "de"] },
   priceQuoted: { type: "boolean" },
    partsAction: { type: "string", enum: ["keep", "update"] },
+     operationsAction: {
+    type: "string",
+    enum: ["keep", "add", "replace"],
+    description:
+      "keep when the customer is not selecting, adding, removing or correcting work in the current message. Material selection, vehicle details, dates, contacts and price questions preserve the selected work. add when adding work to the same request: return the full list including existing work. replace only for an explicit removal, correction, cancellation or a new independent request. When the stored list is null, reconstruct it from the conversation and use replace.",
+  },
+      vehicleAction: {
+    type: "string",
+    enum: ["keep", "update", "replace"],
+    description:
+      "keep when vehicle details are unchanged. update for individual details explicitly supplied, corrected or withdrawn by the customer, or restored from explicit customer statements in available history. Only vehicleFields will be applied. replace only when the customer explicitly switches to a different vehicle; return the complete details known for that new vehicle and null for unknown details.",
+  },
+  vehicleFields: {
+    type: "array",
+    items: {
+      type: "string",
+      enum: vehicleFieldNames,
+    },
+    description:
+      "For vehicleAction=update, list only vehicle fields explicitly supplied, corrected or withdrawn in the current message. During recovery, also list missing fields restored from explicit customer statements in available history. Preserve all unlisted fields. For keep return []. Never infer engine, fuel or year from the model name.",
+  },
   oilPriceMode: {
     type: "string",
     enum: ["none", "automatic", "requested"],
@@ -116,7 +179,24 @@ export const intakeResponseSchema = objectSchema({
     }),
   },
 
-  tirePriceRequest: {
+  tireUpdate: objectSchema({
+    reset: {
+      type: "boolean",
+      description:
+        "true only for a genuinely new separate tire task whose previous parameters no longer apply. Adding tires to the existing request or supplying one parameter does not reset known details.",
+    },
+    fields: {
+      type: "array",
+      items: {
+        type: "string",
+        enum: ["optionId", "quantity", "rimDiameter", "material"],
+      },
+      description:
+        "Only tire parameters explicitly supplied, corrected or withdrawn by the customer in the current message. Other parameters are preserved by the server. When reconstructing a legacy state with no stored tire details, include parameters explicitly established in the conversation. Never derive customer data from examples.",
+    },
+  }),
+
+    tirePriceRequest: {
     ...objectSchema({
       optionId: {
         type: "string",
@@ -126,7 +206,9 @@ export const intakeResponseSchema = objectSchema({
         type: "number",
         enum: [1, 2, 3, 4],
       },
-      rimDiameter: { type: "number" },
+      rimDiameter: {
+        type: "number",
+      },
       material: {
         type: "string",
         enum: ["steel", "alu", "unknown"],
@@ -134,13 +216,12 @@ export const intakeResponseSchema = objectSchema({
     }),
     type: ["object", "null"],
     description:
-      "Required for any tire fitting or complete-wheel swap price, including comparisons and corrections. Supply known operation, quantity, rim diameter and material; unknown means the customer does not know the material or requests both prices. Server supplies all amounts. null when no tire price is being quoted or required details are missing.",
-  },
-
-  oilPriceFollowUp: {
+      "When tire work is selected, request a price only after the stored intake.tires has an operation, quantity, diameter and material; the server uses those stored details. For an informational price question without selected tire work, fill this request from details explicitly given by the customer without adding tire work to selectedOperations. Use null when no price is requested or essential details are missing.",
+     },
+    oilPriceFollowUp: {
     type: "string",
-        description:
-      "One follow-up question after all server-generated oil/filter and tire price tables. The legacy field name also applies to tire prices. Do not repeat the question in reply. No amounts.",
+    description:
+      "The single next question or request for information during active booking, with or without price tables. If required details are still missing, continue by requesting one useful missing group of details; acknowledging the customer's answer in replyLead is not enough. Displayed after all prices and explanations. Empty when no next step is appropriate, including a paused or cancelled conversation, a completed request, or safety-only advice. Never repeat this question in reply or replyLead. No monetary amounts.",
   },
   keepClosedDay: { type: "boolean" },
   needsClarification: { type: "boolean" },
@@ -156,6 +237,7 @@ export function emptyIntakeState() {
   return {
     intent: "general",
     selectedOperations: null,
+        tires: emptyTireDetails(),
     customerParts: null,
     partsOverrides: emptyPartsOverrides(),
     oilFilterScopeReviewed: false,
@@ -263,7 +345,25 @@ export function normalizeIntakeState(value, company) {
         ),
       ]
     : [];
+  state.tires = hasTireWork(state)
+    ? normalizeTireDetails(value.tires)
+    : emptyTireDetails();
 
+  const tirePendingKeys = new Set([
+    "tires.operation",
+    "tires.quantity",
+    "tires.rimDiameter",
+    "tires.rimMaterial",
+  ]);
+
+  state.pendingDetails = [
+    ...new Set([
+      ...state.pendingDetails.filter(
+        key => !tirePendingKeys.has(key),
+      ),
+      ...missingTireDetails(state),
+    ]),
+  ];
   return state;
 }
 
@@ -302,7 +402,7 @@ export function requiresParts(state, company) {
 export function missingIntakeFields(state, company) {
   if (state.intent !== "service_request") return [];
 
-  const missing = [];
+    const missing = [...missingTireDetails(state)];
     const operations = company
     ? normalizeSelectedOperations(state.selectedOperations, company)
     : state.selectedOperations;
@@ -379,8 +479,41 @@ function matchesSchema(value, schema) {
     );
   return true;
 }
-export function validateModelResponse(value) {
+
+export function createIntakeResponseSchema(company) {
+  const schema = structuredClone(intakeResponseSchema);
+
+  if (!Array.isArray(company?.services)) return schema;
+
+  const operationIds = company.services.flatMap(service =>
+    service.options?.length
+      ? service.options.map(
+          option => `${service.id}:${option.id}`,
+        )
+      : [`${service.id}:`],
+  );
+
+  schema.properties.intake.properties.selectedOperations.items = {
+    type: "string",
+    enum: [...new Set([...operationIds, "other"])],
+  };
+
+  return schema;
+}
+
+export function validateModelResponse(value, company = null) {
+  const schema = company
+    ? createIntakeResponseSchema(company)
+    : intakeResponseSchema;
+
   return (
-    matchesSchema(value, intakeResponseSchema) &&
-    Boolean(value.reply.trim() || value.safetyWarning.trim())  );
+    matchesSchema(value, schema) &&
+    Boolean(
+  value.replyLead.trim() ||
+  value.reply.trim() ||
+  value.safetyWarning.trim() ||
+  value.oilPriceFollowUp.trim() ||
+  value.tirePriceRequest !== null
+)
+  );
 }

@@ -1,3 +1,4 @@
+import { withGuideActions } from "./test-helpers/model-response.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -59,7 +60,7 @@ async function modelReply(message,modelPhone,initial=draft(),modelName=initial.c
  const result=await getReply(message,company,[],initial,undefined,false,async params=>{
   context=JSON.parse(params.input[0].content.slice(params.input[0].content.indexOf('{')));
   const intake=structuredClone(initial);intake.customer.phone=modelPhone;intake.customer.name=modelName;
-  return {status:'completed',output_text:JSON.stringify({safetyWarning:'',reply:'Zkontrolujte prosím celé telefonní číslo.',language:'cs',priceQuoted:false,partsAction:'keep',tirePriceRequest: null, oilPriceMode:'none',oilPriceRequests:[],oilPriceFollowUp:'',keepClosedDay:false,needsClarification:true,statusFollowUp:'',intake,submissionAction:'none'})};
+  return {status:'completed',output_text:JSON.stringify(withGuideActions(params, {safetyWarning:'',reply:'Zkontrolujte prosím celé telefonní číslo.',language:'cs',priceQuoted:false,replyLead: "", tireUpdate: {reset:false,fields:[]}, operationsAction: "replace", vehicleAction: "keep", vehicleFields: [], partsAction:'keep',tirePriceRequest: null, oilPriceMode:'none',oilPriceRequests:[],oilPriceFollowUp:'',keepClosedDay:false,needsClarification:true,statusFollowUp:'',intake,submissionAction:'none'}))};
  });
  assert.equal(result.kind,'reply');
  return {result,context};

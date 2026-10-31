@@ -59,7 +59,7 @@ async function modeled(payload, initial) {
   return getReply("Test", company, [], initial, undefined, false, async () => ({ status: "completed", output_text: JSON.stringify(payload) }));
 }
 function payload(initial) {
-  return { safetyWarning: "", reply: "Jasně.", language: "cs", priceQuoted: true, keepClosedDay: false, needsClarification: false, statusFollowUp: "", submissionAction: "none", intake: structuredClone(initial), partsAction: "keep", tirePriceRequest: null, oilPriceMode: "requested", oilPriceRequests: [requests[0]], oilPriceFollowUp: "Jaký termín Vám vyhovuje?" };
+  return { safetyWarning: "", reply: "Jasně.", language: "cs", priceQuoted: true, keepClosedDay: false, needsClarification: false, statusFollowUp: "", submissionAction: "none", intake: structuredClone(initial), replyLead: "", tireUpdate: {reset:false,fields:[]}, operationsAction: "replace", vehicleAction: "keep", vehicleFields: [], partsAction: "keep", tirePriceRequest: null, oilPriceMode: "requested", oilPriceRequests: [requests[0]], oilPriceFollowUp: "Jaký termín Vám vyhovuje?" };
 }
 test("a hypothetical response cannot overwrite suppliers when partsAction is keep", async () => {
   const initial = state(false, false);

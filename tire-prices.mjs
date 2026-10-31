@@ -88,25 +88,25 @@ export function renderTireQuote(company, request, language = "cs") {
     cs: [
       "Přezutí pneumatik",
       "Výměna kompletních kol",
-      "Materiál ráfků",
+      "Úkon",
       "Cena práce",
       "Plechové",
-      "Hliníkové (ALU)",
+      "Hliníkové",
       "Cenu pro tuto kombinaci upřesní servis.",
     ],
     sk: [
       "Prezutie pneumatík",
       "Výmena kompletných kolies",
-      "Materiál diskov",
+      "Úkon",
       "Cena práce",
       "Plechové",
-      "Hliníkové (ALU)",
+      "Hliníkové",
       "Cenu pre túto kombináciu upresní servis.",
     ],
     en: [
       "Tire fitting",
       "Complete wheel swap",
-      "Rim material",
+      "Service",
       "Labor price",
       "Steel",
       "Alloy",
@@ -115,25 +115,25 @@ export function renderTireQuote(company, request, language = "cs") {
     ru: [
       "Шиномонтаж",
       "Замена колёс в сборе",
-      "Материал дисков",
+      "Услуга",
       "Цена работы",
       "Стальные",
-      "Легкосплавные (ALU)",
+      "Легкосплавные",
       "Стоимость для этого сочетания уточнит сервис.",
     ],
     uk: [
       "Шиномонтаж",
       "Заміна коліс у зборі",
-      "Матеріал дисків",
+      "Послуга",
       "Вартість роботи",
       "Сталеві",
-      "Легкосплавні (ALU)",
+      "Легкосплавні",
       "Вартість для цього поєднання уточнить сервіс.",
     ],
     de: [
       "Reifenmontage",
       "Wechsel kompletter Räder",
-      "Felgenmaterial",
+      "Leistung",
       "Arbeitskosten",
       "Stahl",
       "Aluminium",
@@ -149,19 +149,37 @@ export function renderTireQuote(company, request, language = "cs") {
   const action =
     result.optionId === "seasonal_tires" ? labels[0] : labels[1];
 
+  const rimPhrases = {
+    cs: { steel: "na plechových ráfcích", alu: "na hliníkových ráfcích" },
+    sk: { steel: "na plechových diskoch", alu: "na hliníkových diskoch" },
+    en: { steel: "on steel rims", alu: "on alloy rims" },
+    ru: { steel: "на стальных дисках", alu: "на легкосплавных дисках" },
+    uk: { steel: "на сталевих дисках", alu: "на легкосплавних дисках" },
+    de: { steel: "auf Stahlfelgen", alu: "auf Aluminiumfelgen" },
+  };
+  const wheelPhrases = {
+    cs: { steel: "s plechovými ráfky", alu: "s hliníkovými ráfky" },
+    sk: { steel: "s plechovými diskami", alu: "s hliníkovými diskami" },
+    en: { steel: "with steel rims", alu: "with alloy rims" },
+    ru: { steel: "со стальными дисками", alu: "с легкосплавными дисками" },
+    uk: { steel: "зі сталевими дисками", alu: "з легкосплавними дисками" },
+    de: { steel: "mit Stahlfelgen", alu: "mit Aluminiumfelgen" },
+  };
+
   const number = new Intl.NumberFormat(
     Object.hasOwn(words, language) ? language : "en",
     { maximumFractionDigits: 2 },
   );
 
   const rows = result.variants.map((variant) => {
-    const material = variant.material === "steel" ? labels[4] : labels[5];
-    return `| ${material} | ${number.format(variant.priceKc)} Kč |`;
+    const phrases = result.optionId === "seasonal_tires"
+      ? rimPhrases : wheelPhrases;
+    const work = `${action} ${(phrases[language] ?? phrases.en)[variant.material]} ` +
+      `(${result.quantity} × ${number.format(result.rimDiameter)}″)`;
+    return `| ${work} | ${number.format(variant.priceKc)} Kč |`;
   });
 
   return [
-    `${action} (${result.quantity} × ${number.format(result.rimDiameter)}″):`,
-    "",
     `| ${labels[2]} | ${labels[3]} |`,
     "|---|---:|",
     ...rows,

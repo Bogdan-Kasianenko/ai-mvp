@@ -30,7 +30,7 @@ function params() {
 function answer(request, overrides = {}) {
   const data = {
     safetyWarning: "", reply: "Test reply", language: "cs", priceQuoted: false,
-    partsAction: "keep", tirePriceRequest: null, oilPriceMode: "none", oilPriceRequests: [], oilPriceFollowUp: "",
+    replyLead: "", tireUpdate: {reset:false,fields:[]}, operationsAction: "replace", vehicleAction: "keep", vehicleFields: [], partsAction: "keep", tirePriceRequest: null, oilPriceMode: "none", oilPriceRequests: [], oilPriceFollowUp: "",
     keepClosedDay: false, needsClarification: false, statusFollowUp: "",
     intake: emptyIntakeState(), submissionAction: "none",
   };
@@ -46,9 +46,9 @@ function tool(ids) {
   }] };
 }
 
-test("production registry enables both symptoms and tires without binding symptoms to diagnostics or oil", () => {
-  assert.deepEqual(Object.keys(guideRegistry).sort(), ["jerkingDuringAcceleration", "noStart", "tires"]);
-  assert.deepEqual(requiredGuideIds(["diagnostics:", "oil_filters:engine_oil"]), []);
+test("production registry binds oil and tires while diagnostics does not imply a symptom guide", () => {
+  assert.deepEqual(Object.keys(guideRegistry).sort(), ["jerkingDuringAcceleration", "noStart", "oilFilters", "tires", "wrongFuelTowing"]);
+  assert.deepEqual(requiredGuideIds(["diagnostics:", "oil_filters:engine_oil"]), ["oilFilters"]);
 });
 
 test("guide normalization rejects unknown, inherited, path and non-string IDs and deduplicates", () => {

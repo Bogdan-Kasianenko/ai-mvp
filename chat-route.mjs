@@ -4,6 +4,8 @@ import { APIConnectionTimeoutError, APIConnectionError, InternalServerError } fr
 import { beginPendingChat, finishPendingChat, failPendingChat, chatSessionSnapshot, previousSentRequest } from "./pending-chat.mjs";
 import {
   reviewAppointment,
+  appointmentContext,
+  partialDateQuestion,
   appointmentIssueMessage,
   inspectAppointmentPreference,
   closedDayMessage,
@@ -13,6 +15,7 @@ import {
   normalizeIntakeState,
   missingIntakeFields,
   emptyIntakeState,
+  hasValidContact,
 } from "./intake.mjs";
 import {
   handleSendConfirmation,
@@ -205,6 +208,7 @@ while (
           priceMemory: session.priceMemory ?? [],
           oilPriceMemory: session.oilPriceMemory ?? [],
           closedDayReview: session.closedDayReview ?? null,
+          pendingDateReview: session.pendingDateReview ?? null,
           language: session.language,
           previousSentRequest: previousSentRequest(session),
           deliveryStatus: deliveryStatus(session),
@@ -234,6 +238,112 @@ while (
       }
 
       const next = normalizeIntakeState(result.intake, company);
+      const lastAssistant = [...history].reverse()
+        .find((entry) => entry.role === "assistant")?.content ?? "";
+      const calendar = appointmentContext(
+        message, intake, session.closedDayReview, company,
+      );
+      const awaitingDate = /(?:termín|datum|kdy|date|appointment|дата|термін|Termin)/iu
+        .test(lastAssistant) && /[?？]/u.test(lastAssistant);
+
+      if (
+        next.intent === "service_request" &&
+        calendar.requiresFullDateConfirmation &&
+        calendar.requested &&
+        (awaitingDate || session.pendingDateReview)
+      ) {
+        session.pendingDateReview = calendar.requested.date;
+        next.preferredTime = intake.preferredTime;
+        return answer({
+          reply: [
+            result.safetyWarning?.trim(),
+            partialDateQuestion(calendar.requested.date, session.language),
+          ].filter(Boolean).join("\n\n"),
+          intake: next,
+          missingFields: missingIntakeFields(next, company),
+        });
+      }
+
+      if (session.pendingDateReview) {
+        const pendingDate = session.pendingDateReview;
+        if (/^(?:ano|jo|jasně|přesně|yes|yep|ja|да|так)(?:\s|[.,!?]|$)/iu.test(message.trim())) {
+          const proposed = inspectAppointmentPreference(next.preferredTime);
+          const userMentionedTime = /(?:\d{1,2}:\d{2}|kolem\s*\d{1,2}|okolo\s*\d{1,2}|around\s*\d{1,2})/iu.test(message);
+          const timeMatch = userMentionedTime
+            ? String(next.preferredTime ?? "").match(/(?:^|\D)([01]?\d|2[0-3]):([0-5]\d)(?!\d)/u) ??
+              result.text.match(/(?:kolem|okolo|around)\s*([01]?\d|2[0-3]):([0-5]\d)/iu)
+            : null;
+          const time = timeMatch
+            ? `${timeMatch[1].padStart(2, "0")}:${timeMatch[2]}`
+            : null;
+          next.preferredTime = proposed.valid && proposed.date === pendingDate
+            ? next.preferredTime
+            : time && inspectAppointmentPreference(`${pendingDate} ${time}`).valid
+              ? `${pendingDate} ${time}`
+              : pendingDate;
+          session.pendingDateReview = null;
+        } else if (/^(?:ne|nikoliv|нет|ні)(?:\s|[.,!?]|$)/iu.test(message.trim())) {
+          session.pendingDateReview = null;
+          next.preferredTime = intake.preferredTime;
+          return answer({
+            reply: {
+              cs: "Jaký jiný termín by Vám vyhovoval?",
+              sk: "Aký iný termín by Vám vyhovoval?",
+              en: "What other date would suit you?",
+              ru: "Какая другая дата вам подойдёт?",
+              uk: "Яка інша дата Вам підійде?",
+              de: "Welcher andere Termin würde Ihnen passen?",
+            }[session.language] ?? "What other date would suit you?",
+            intake: next,
+            missingFields: missingIntakeFields(next, company),
+          });
+        } else if (/(?:\d{4}-\d{2}-\d{2}|\d{1,2}\s*[./]\s*\d{1,2}|\d{1,2}\s+(?:ledna|února|března|dubna|května|června|července|srpna|září|října|listopadu|prosince|januára|februára|marca|apríla|mája|júna|júla|augusta|septembra|októbra|novembra|decembra|january|february|march|april|may|june|july|august|september|october|november|december))/iu.test(message)) {
+          session.pendingDateReview = null;
+        } else {
+          // An opening-hours question does not answer the date question.
+          next.preferredTime = intake.preferredTime;
+          next.intent = intake.intent;
+        }
+      }
+
+      if (
+        !hasValidContact(intake.customer) &&
+        hasValidContact(next.customer) &&
+        inspectAppointmentPreference(intake.preferredTime).valid &&
+        !/(?:termín|datum|zítra|zitra|kolem|hodin|date|tomorrow|дата|завтра|Termin|morgen)/iu.test(message)
+      ) {
+        next.preferredTime = intake.preferredTime;
+      }
+
+      const newContact = !hasValidContact(intake.customer) &&
+        hasValidContact(next.customer);
+      const declinesExtras = /(?:nic dalšího|nic dalsiho|nechci nic|nothing else|ничего больше|нічого більше|nichts weiter)/iu
+        .test(message);
+      const addedWork = JSON.stringify(next.selectedOperations) !==
+        JSON.stringify(intake.selectedOperations);
+      if (
+        next.intent === "service_request" &&
+        newContact &&
+        !intake.additionalServicesReviewed &&
+        !declinesExtras &&
+        !addedWork &&
+        missingIntakeFields(next, company).length === 0 &&
+        next.pendingDetails.length === 0
+      ) {
+        next.additionalServicesReviewed = false;
+        if (!/[?？]/u.test(result.text) ||
+            !/(?:poznámk|služb|note|service|примечан|услуг|примітк|послуг|Anmerkung|Leistung)/iu.test(result.text)) {
+          result.text = {
+            cs: "Děkuji, kontakt mám. Chcete k žádosti ještě něco doplnit, například poznámku nebo další službu?",
+            sk: "Ďakujem, kontakt mám. Chcete k žiadosti ešte niečo doplniť, napríklad poznámku alebo ďalšiu službu?",
+            en: "Thank you, I have your contact details. Would you like to add a note or another service?",
+            ru: "Спасибо, контакт записал. Хотите добавить к заявке примечание или ещё одну услугу?",
+            uk: "Дякую, контакт записав. Бажаєте додати до заявки примітку або ще одну послугу?",
+            de: "Vielen Dank, Ihre Kontaktdaten habe ich. Möchten Sie eine Anmerkung oder eine weitere Leistung ergänzen?",
+          }[session.language] ?? "Would you like to add a note or another service?";
+        }
+        result.hasFollowUp = true;
+      }
             const statusOnly =
         result.submissionAction === "ask_status" &&
         draftFingerprint(next) === draftFingerprint(intake);
@@ -313,7 +423,10 @@ while (
           { preserveConfirmation: hasPendingConfirmation(session) },
         );
       }
-      if (result.needsClarification === true)
+        if (
+        result.needsClarification === true ||
+        result.hasFollowUp === true
+      )
         return answer({
           reply: result.text,
           intake: next,
@@ -415,6 +528,7 @@ export function createSessionHandler({
           priceMemory: [],
           oilPriceMemory: [],
           closedDayReview: null,
+          pendingDateReview: null,
           responses: [],
           lastDelivery: null,
         });

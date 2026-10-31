@@ -6,6 +6,7 @@ import {
   partsFingerprint,
   operationsFingerprint,
 } from "./parts-supply.mjs";
+import { normalizeTireDetails } from "./tire-details.mjs";
 
 const SESSION_TTL = 24 * 60 * 60 * 1000;
 const EMPTY_SESSION_TTL = 5 * 60 * 1000;
@@ -21,6 +22,7 @@ function sessionExpiration(session, time) {
 export function draftFingerprint(intake) {
   return JSON.stringify({
     selectedOperations: operationsFingerprint(intake),
+    tires: normalizeTireDetails(intake.tires),
     customerParts: intake.customerParts,
     partsOverrides: partsFingerprint(intake),
     serviceId: intake.serviceId,
@@ -92,6 +94,7 @@ export function createChatSessionStore({
         requestId: randomUUID(),
         revision: 0,
         confirmation: null,
+        pendingDateReview: null,
         history: [],
         intake: emptyIntakeState(),
         busy: false,

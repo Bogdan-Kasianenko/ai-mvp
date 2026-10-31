@@ -1,8 +1,22 @@
 import { noStartGuide } from "./no-start.mjs";
 import { jerkingGuide } from "./jerking.mjs";
 import { tiresGuide } from "./tires.mjs";
+import { oilFiltersGuide } from "./oil-filters.mjs";
+import { wrongFuelTowingGuide } from "./wrong-fuel-towing.mjs";
 
 export const guideRegistry = Object.freeze({
+    wrongFuelTowing: Object.freeze({
+    ...wrongFuelTowingGuide,
+    description:
+      "Nesprávně natankované palivo, například benzín místo nafty nebo nafta místo benzínu; nabídka odtahu, dotazy na odtahovou službu a předání jejího kontaktu.",
+    serviceIds: Object.freeze(["towing"]),
+  }),
+    oilFilters: Object.freeze({
+    ...oilFiltersGuide,
+    description:
+      "Výměna motorového oleje a olejového, vzduchového, kabinového, palivového nebo LPG filtru; rozsah práce, dodání materiálu, porovnání cen a potřebné údaje motoru.",
+    serviceIds: Object.freeze(["oil_filters"]),
+  }),
     tires: Object.freeze({
     ...tiresGuide,
     description:

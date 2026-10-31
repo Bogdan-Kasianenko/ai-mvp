@@ -1669,117 +1669,144 @@ line-height: 1;
     max-height: min(55dvh, 390px);
   }
 }
-#chat-panel .chat-price-table {
-    box-shadow:
-    0 5px 16px rgba(35, 70, 73, 0.12),
-    0 1px 3px rgba(35, 70, 73, 0.06);
-  max-width: 100%;
-  margin: 12px 0;
-  overflow-x: auto;
-  border: 1px solid rgba(45, 92, 94, 0.18);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.55);
-  white-space: normal;
-}
-
-#chat-panel .chat-price-table table {
+/* Единый вид цен и заявки */
+#chat-panel .chat-price-table,
+#chat-panel .chat-request-card {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font: inherit;
+  max-width: 100%;
+  margin: 10px 0;
+  overflow: hidden;
+  border: 1px solid rgba(45, 92, 94, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 0 5px 16px rgba(35, 70, 73, 0.1);
+  white-space: normal;
   font-size: 0.9em;
   line-height: 1.4;
 }
 
-#chat-panel .chat-price-table th,
-#chat-panel .chat-price-table td {
-  padding: 11px 12px;
-  text-align: left;
-  vertical-align: top;
-  border: 0;
+/* Цены */
+#chat-panel .chat-price-table table,
+#chat-panel .chat-price-table tbody {
+  display: block;
+  width: 100%;
+  font: inherit;
 }
 
-#chat-panel .chat-price-table th {
-  color: #355659;
-  background: rgba(0, 124, 117, 0.08);
-  font-size: 0.85em;
-  font-weight: 650;
-}
-
-#chat-panel .chat-price-table td {
-  border-top: 1px solid rgba(45, 92, 94, 0.12);
-}
-
-#chat-panel .chat-price-table td:first-child {
-  min-width: 125px;
-  font-weight: 550;
-  overflow-wrap: anywhere;
-}
-
-#chat-panel .chat-price-table th:not(:first-child),
-#chat-panel .chat-price-table td:not(:first-child) {
-  text-align: right;
-}
-
-#chat-panel .chat-price-table td:not(:first-child) {
-  color: #007c75;
-  font-weight: 750;
+#chat-panel .chat-price-table thead {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
   white-space: nowrap;
 }
 
-#chat-panel #messages { position: relative; }
-
-#chat-panel .chat-request-card {
-  width: 100%;
-  max-width: 100%;
-  padding: 0;
-  margin: 12px 0;
-  border: 1px solid rgba(45, 92, 94, 0.18);
-  border-radius: 18px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.55);
-  box-shadow: 0 5px 16px rgba(35, 70, 73, 0.12),
-              0 1px 3px rgba(35, 70, 73, 0.06);
-  white-space: normal;
-  font-size: 0.9em;
-  line-height: 1.45;
+#chat-panel .chat-price-table tbody tr {
+  display: block;
+  padding: 14px 16px;
 }
-#chat-panel .chat-request-card__title {
-  padding: 12px 14px;
-  background: rgba(0, 124, 117, 0.08);
+
+#chat-panel .chat-price-table tbody tr + tr {
+  border-top: 1px solid rgba(45, 92, 94, 0.13);
+}
+
+#chat-panel .chat-price-table td {
+  display: block;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+#chat-panel .chat-price-table td:first-child {
   color: #355659;
+  font-size: 1em;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  margin-bottom: 12px;
+}
+
+#chat-panel .chat-price-table td:not(:first-child) {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(45, 92, 94, 0.17);
+  color: #007c75;
+  font-weight: 750;
+  text-align: right;
+  white-space: nowrap;
+}
+
+#chat-panel .chat-price-table td[data-label]::before {
+  content: attr(data-label);
+  color: #526b6d;
+  font-size: 1em;
+  font-weight: 500;
+  text-align: left;
+  white-space: normal;
+}
+
+#chat-panel .chat-price-table td:not(:first-child) + td {
+  margin-top: 10px;
+}
+
+/* Заявка */
+#chat-panel #messages {
+  position: relative;
+}
+
+#chat-panel .chat-request-card__title {
+  padding: 14px 16px 11px;
+  color: #355659;
+  font-size: 1.05em;
   font-weight: 700;
 }
-#chat-panel .chat-request-card dl { margin: 0; }
+
+#chat-panel .chat-request-card dl {
+  margin: 0;
+  padding: 0 14px 5px;
+}
+
 #chat-panel .chat-request-card__field {
   display: grid;
-  grid-template-columns: minmax(90px, 30%) minmax(0, 1fr);
-  gap: 6px 14px;
-  padding: 11px 14px;
-  border-top: 1px solid rgba(45, 92, 94, 0.12);
+  grid-template-columns: minmax(90px, 32%) minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 2px;
+  border-top: 1px solid rgba(45, 92, 94, 0.13);
 }
-#chat-panel .chat-request-card dt {
-  margin: 0;
-  color: #355659;
-  font-size: 0.9em;
-  font-weight: 550;
-  overflow-wrap: anywhere;
-}
-#chat-panel .chat-request-card dd {
-  margin: 0;
-  min-width: 0;
-  font-weight: 550;
-  overflow-wrap: anywhere;
-}
+
 #chat-panel .chat-request-card__field:first-child {
   grid-template-columns: 1fr;
   gap: 4px;
 }
-@media (max-width: 420px) {
-  #chat-panel .chat-request-card__field { grid-template-columns: 1fr; gap: 3px; }
+
+#chat-panel .chat-request-card dt,
+#chat-panel .chat-request-card dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
+#chat-panel .chat-request-card dt {
+  color: #526b6d;
+  font-size: 0.88em;
+  font-weight: 550;
+}
 
+#chat-panel .chat-request-card dd {
+  color: #30454c;
+  font-weight: 600;
+}
+
+@media (max-width: 420px) {
+  #chat-panel .chat-request-card__field {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}
 /* Settings slide over the composer without moving the conversation. */
 #chat-panel #chat-settings-layer[hidden],
 #chat-panel #chat-settings-layer [hidden] { display: none; }
@@ -1917,107 +1944,6 @@ line-height: 1;
   background: white;
   color: #00b8a9;
   box-shadow: none;
-}
-
-/* Вертикальное отображение цен */
-#chat-panel .chat-price-table {
-  overflow: hidden;
-}
-
-#chat-panel .chat-price-table table,
-#chat-panel .chat-price-table tbody {
-  display: block;
-  width: 100%;
-}
-
-#chat-panel .chat-price-table thead {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-#chat-panel .chat-price-table tbody tr {
-  display: block;
-  padding: 16px;
-}
-
-#chat-panel .chat-price-table tbody tr + tr {
-  border-top: 1px solid rgba(45, 92, 94, 0.15);
-}
-
-#chat-panel .chat-price-table td {
-  display: block;
-  padding: 0;
-  border: 0;
-  text-align: left;
-  white-space: normal;
-}
-
-#chat-panel .chat-price-table td:first-child {
-  min-width: 0;
-  margin-bottom: 14px;
-  color: #355659;
-  font-weight: 650;
-  overflow-wrap: break-word;
-}
-
-#chat-panel .chat-price-table td:not(:first-child) {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  text-align: left;
-  white-space: normal;
-  color: #007c75;
-  font-weight: 750;
-}
-
-#chat-panel .chat-price-table td:not(:first-child)
-  + td:not(:first-child) {
-  margin-top: 12px;
-}
-
-#chat-panel .chat-price-table td[data-label]::before {
-  content: attr(data-label);
-  color: #355659;
-  font-size: 0.85em;
-  font-weight: 500;
-}
- #chat-panel .chat-price-table td[data-label]::before {
-  font-size: 1em;
-}
-
-#chat-panel .chat-price-table td:not(:first-child)
-  + td:not(:first-child) {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid rgba(45, 92, 94, 0.18);
-}
-
-#chat-panel .chat-price-table tbody tr {
-  padding: 0;
-}
-
-#chat-panel .chat-price-table td:first-child {
-  margin: 0;
-  padding: 16px;
-  background: rgba(0, 124, 117, 0.08);
-  border-bottom: 1px solid rgba(45, 92, 94, 0.12);
-}
-
-#chat-panel .chat-price-table td:not(:first-child) {
-  padding: 14px 16px;
-}
-
-#chat-panel .chat-price-table td:not(:first-child)
-  + td:not(:first-child) {
-  margin-top: 0;
-  padding-top: 14px;
-  border-top: 1px solid rgba(45, 92, 94, 0.12);
 }
 
 #chat-panel .chat-message__meta {

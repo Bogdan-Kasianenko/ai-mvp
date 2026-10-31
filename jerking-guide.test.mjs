@@ -28,7 +28,7 @@ function answer(request, actions = {}) {
     ? JSON.parse(first.slice(prefix.length)).intake : emptyIntakeState();
   const data = {
     safetyWarning: "", reply: "Běží motor nepravidelně i na volnoběh?",
-    language: "cs", priceQuoted: false, partsAction: "keep",
+    language: "cs", priceQuoted: false, replyLead: "", tireUpdate: {reset:false,fields:[]}, operationsAction: "replace", vehicleAction: "keep", vehicleFields: [], partsAction: "keep",
     tirePriceRequest: null, oilPriceMode: "none", oilPriceRequests: [], oilPriceFollowUp: "",
     keepClosedDay: false, needsClarification: false, statusFollowUp: "",
     intake, submissionAction: "none",
@@ -62,7 +62,7 @@ for (const activeGuides of [[], ["noStart"], [jerk], ids]) {
       assert.equal(text.split(guideRegistry[id].instructions).length - 1, activeGuides.includes(id) ? 1 : 0);
     }
     assert.deepEqual(company, before);
-    assert.match(text, /CHYBNĚ NATANKOVANÉ PALIVO A ODTAH/);
+    assert.match(text, /CHYBNĚ NATANKOVANÉ PALIVO — PRVNÍ REAKCE/);
     assert.match(text, /safetyWarning/);
   });
 }
@@ -124,7 +124,7 @@ test("both real guides can load in one batch and only one can subsequently be cl
   const kept = await getReply("Startování už neřešme", company, [], loaded.intake,
     undefined, false, async request => {
       count++;
-      assert.deepEqual(request.tools[0].parameters.properties.guideIds.items.enum, ["tires"]);
+      assert.deepEqual(request.tools[0].parameters.properties.guideIds.items.enum, ["oilFilters", "tires", "wrongFuelTowing"]);
       return answer(request, { noStart: "clear", [jerk]: "keep" });
     }, false, { activeGuides: loaded.activeGuides });
   assert.equal(kept.kind, "reply");

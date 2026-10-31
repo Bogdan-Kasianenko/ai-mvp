@@ -1,5 +1,9 @@
 import { getPriceQuote } from "./pricing.mjs";
-import { operationPartsSource, partSource } from "./parts-supply.mjs";
+import {
+  operationPartsSource,
+  partSource,
+  hasUnspecifiedPartsSupply,
+} from "./parts-supply.mjs";
 
 export const oilOptionIds = ["engine_oil", "air_filter", "cabin_filter", "fuel_filter", "lpg_filter"];
 const translations = {
@@ -56,5 +60,64 @@ export function renderOilQuotes(company, state, requests, mode, memory = [], lan
   }
   const hasServiceMaterial = rows.some((row) => row.variants.some((variant) => !variant.customerParts) ||
     (row.optionId === "engine_oil" && ["engineOil", "oilFilter"].some((key) => partSource(state, key) === false)));
-  return { text: [table.join("\n"), hasServiceMaterial ? words.note : ""].filter(Boolean).join("\n\n"), records: rows };
+    return {
+    text: [
+      words.intro,
+      table.join("\n"),
+      hasServiceMaterial ? words.note : "",
+    ].filter(Boolean).join("\n\n"),
+    records: rows,
+  };
+}
+
+export function renderAutomaticOilQuotes(
+  company,
+  state,
+  memory = [],
+  language = "cs",
+) {
+  const empty = { text: "", records: [] };
+
+  if (
+    state.intent !== "service_request" ||
+    !Array.isArray(state.selectedOperations)
+  ) {
+    return empty;
+  }
+
+  const selectedIds = oilOptionIds.filter((optionId) =>
+    state.selectedOperations.includes(`oil_filters:${optionId}`),
+  );
+
+  if (!selectedIds.length) return empty;
+
+  if (
+    selectedIds.includes("engine_oil") &&
+    state.oilFilterScopeReviewed !== true
+  ) {
+    return empty;
+  }
+
+  const oilState = {
+    ...state,
+    selectedOperations: selectedIds.map(
+      (optionId) => `oil_filters:${optionId}`,
+    ),
+  };
+
+  if (hasUnspecifiedPartsSupply(oilState, company)) {
+    return empty;
+  }
+
+  return renderOilQuotes(
+    company,
+    state,
+    selectedIds.map((optionId) => ({
+      optionId,
+      source: "selected",
+    })),
+    "automatic",
+    memory,
+    language,
+  );
 }
