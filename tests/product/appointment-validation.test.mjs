@@ -66,3 +66,36 @@ test('status of an already sent request remains available after its preferred da
  const handler=createChatHandler({getSession:()=>s,loadCompanyData:async()=>company,replyToMessage:async()=>({kind:'reply',text:'Status?',intake:structuredClone(state),language:'cs',submissionAction:'ask_status'}),sendConfirmation:()=>{throw Error('No resend');}});
  const out=response();await handler({body:{message:'Je žádost odeslaná?',messageId:'past-sent-status'},ip:'test'},out);assert.match(out.body.reply,/odeslána/);assert.equal(out.body.intake.preferredTime,'2020-01-01');assert.equal(out.body.confirmationToken,null);
 });
+
+test("a completed Sunday draft receives a warning without a send token or mail call", async t => {
+  t.mock.timers.enable({apis:["Date"],now:Date.parse("2026-10-20T08:00:00Z")});
+  const state = complete();
+  state.preferredTime = null;
+  const session = {
+    intake: state, revision: 0, history: [], language: "cs", lastDelivery: null,
+    requestId: "fixture-contract", confirmation: null,
+    repository: { activeCount: () => 0, allow: () => true, allowMany: () => true },
+    acquire: () => true, release() {}, persist() {},
+  };
+  let sends = 0;
+  const handler = createChatHandler({
+    loadCompanyData: async () => company,
+    getSession: () => session,
+    replyToMessage: async () => ({
+      kind: "reply", text: "Termín jsem poznamenal.", language: "cs", priceQuoted: false,
+      keepClosedDay: true, needsClarification: false, submissionAction: "confirm_send",
+      intake: { ...structuredClone(state), preferredTime: "2026-10-25" },
+    }),
+    sendConfirmation: async () => { sends++; throw new Error("Unexpected sending"); },
+  });
+  const response = Object.assign(new EventEmitter(), {
+    locals: {}, writableEnded: false,
+    json(body) { this.body = body; return this; },
+    status(code) { this.code = code; return this; },
+  });
+  await handler({ body: { message: "25.10.2026." }, ip: "test" }, response);
+  assert.match(response.body.reply, /zavřeno/);
+  assert.equal(response.body.intake.preferredTime, null);
+  assert.equal(response.body.confirmationToken, null);
+  assert.equal(sends, 0);
+});

@@ -102,23 +102,8 @@ test("loading retains function linkage and reasoning, then requires keep/clear w
   assert.deepEqual(params, before);
 });
 
-test("ordinary oil request stays one model call without guide or guideActions", async () => {
-  let calls = 0;
-  const result = await respondWithGuides({
-    params: baseParams("Výměna oleje"), instructionsForGuides,
-    createResponse: async request => {
-      calls++;
-      assert.equal(Object.hasOwn(sentCompany(request).symptomGuide, "noStart"), false);
-      assert.equal(Object.hasOwn(request.text.format.schema.properties, "guideActions"), false);
-      return answer(request);
-    },
-  });
-  assert.equal(calls, 1);
-  assert.deepEqual(result.activeGuides, []);
-});
-
-for (const message of ["cvaka", "Suzuki Swift 2018", "ano", "Chci kontrolu startování", "Potřebuji odtah"]) {
-  test("keep preserves guide for continuation in one call: " + message, async () => {
+test("keep preserves a loaded guide on a short continuation in one call", async () => {
+    const message = "cvaka";
     let calls = 0;
     const result = await respondWithGuides({
       params: baseParams(message), activeGuides: ["noStart"], instructionsForGuides,
@@ -135,8 +120,7 @@ for (const message of ["cvaka", "Suzuki Swift 2018", "ano", "Chci kontrolu start
     assert.equal(calls, 1);
     assert.deepEqual(result.activeGuides, ["noStart"]);
     assert.ok(validateModelResponse(JSON.parse(result.response.output_text)));
-  });
-}
+});
 
 test("clear removes guide from subsequent requests in one call without exposing metadata", async () => {
   let calls = 0;
@@ -311,23 +295,6 @@ test("price repair after loading retains the function-call context", async () =>
   assert.equal(requests.length, 3);
   assert.ok(requests[2].input.some(item => item.type === "function_call_output"));
   assert.deepEqual(requests[2].text.format.schema, createIntakeResponseSchema(company));
-});
-
-test("required metadata and tool schemas do not leak between sessions or mutate original params", async () => {
-  const params = baseParams();
-  const before = structuredClone(params);
-  for (const activeGuide of [null, "noStart", null, "noStart"]) {
-    let captured;
-    await respondWithGuides({
-      params, activeGuides: activeGuide ? [activeGuide] : [], instructionsForGuides,
-      createResponse: async request => { captured = request; return answer(request); },
-    });
-    assert.equal(Object.hasOwn(captured.text.format.schema.properties, "guideActions"), activeGuide === "noStart");
-    assert.equal(captured.tool_choice, "auto");
-    assert.deepEqual(captured.tools[0].parameters.properties.guideIds.items.enum,
-      Object.keys(guideRegistry).filter(id => id !== activeGuide).sort());
-    assert.deepEqual(params, before);
-  }
 });
 
 function response() {

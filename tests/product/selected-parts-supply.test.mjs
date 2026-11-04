@@ -31,6 +31,7 @@ test('an added air filter blocks until its supplier is known',()=>{
  const state=full({engineOil:true,oilFilter:true},'Výměna oleje a olejového i vzduchového filtru');
  state.selectedOperations.push('oil_filters:air_filter');
  assert.equal(readyToSend(state,company),false);
+ assert.ok(missingIntakeFields(state,company).includes('customerParts'));
  state.partsOverrides.airFilter=false;assert.equal(readyToSend(state,company),true);
 });
 test('all filters requires the standard scope and includes explicitly selected fuel/LPG filters',()=>{
@@ -66,6 +67,52 @@ test('unused overrides are omitted from an individually resolved scope',()=>{
  const state=full({engineOil:true,oilFilter:false,lpgFilter:true});
  assert.doesNotMatch(describeParts(state,'cs','fallback'),/LPG/);
 });
-for(const name of ['Výměna oleje a olejového filtru','Výmena motorového oleja a olejového filtra','Engine oil and oil filter replacement','Замена моторного масла и масляного фильтра','Заміна моторної оливи та оливного фільтра','Motoröl- und Ölfilterwechsel'])test('recognized oil scope remains independent of overall supplier: '+name,()=>{
- assert.equal(readyToSend(full(undefined,name),company),true);
+test("Невыбранный фильтр в описании не требует поставщика", () => {
+  const descriptions = [
+    "Výměna oleje a olejového filtru bez vzduchového filtru",
+    "Výmena oleja a olejového filtra bez vzduchového filtra",
+    "Replace engine oil and oil filter only",
+    "Замена масла и масляного фильтра без воздушного фильтра",
+    "Заміна оливи та оливного фільтра без повітряного фільтра",
+    "Nur Motoröl- und Ölfilterwechsel",
+  ];
+
+  for (const description of descriptions) {
+    const state = full(undefined,description);
+
+    assert.equal(readyToSend(state, company), true, description);
+  }
+});
+
+test("Неуточнённая дополнительная работа блокирует отправку", () => {
+  const descriptions = [
+    "Výměna oleje a motoru",
+    "Engine oil replacement and engine replacement",
+    "Замена масла и мотора",
+  ];
+
+  for (const description of descriptions) {
+    const state = full(undefined,description);
+    state.selectedOperations.push("other");
+
+    assert.ok(
+      missingIntakeFields(state, company).includes("selectedOperations"),
+      description
+    );
+    assert.equal(readyToSend(state, company), false);
+
+    // Общий поставщик не устраняет неопределённость состава работ.
+    state.customerParts = true;
+    assert.equal(readyToSend(state, company), false);
+  }
+});
+
+test("Старая заявка без списка работ требует уточнения", () => {
+  const state = full(undefined,"Výměna oleje a motoru");
+  delete state.selectedOperations;
+
+  assert.ok(
+    missingIntakeFields(state, company).includes("selectedOperations")
+  );
+  assert.equal(readyToSend(state, company), false);
 });

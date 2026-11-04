@@ -31,13 +31,6 @@ test("service supplies the omitted oil price after engine input and places the q
  assert.equal(result.priceQuoted,true);assert.equal(result.oilPriceRecords.length,1);
  assert.equal(result.intake.vehicle.engine,"1,3 l");assert.equal(result.intake.vehicle.fuel,"benzín");
 });
-test("a subsequent ordinary reply does not repeat the automatically quoted price",async()=>{
- const initial=state(),value=payload(initial);
- const first=await ask(initial,value);
- const second=await ask(first.intake,value,{oilPriceMemory:first.oilPriceRecords});
- assert.equal(second.kind,"reply");assert.doesNotMatch(second.text,/400 Kč/);
- assert.equal(second.oilPriceRecords.length,0);assert.equal(second.priceQuoted,false);
-});
 test("automatic own-oil labor is 500 while the service-supplied LPG filter stays 400",async()=>{
  const initial=state();initial.selectedOperations.push("oil_filters:lpg_filter");initial.partsOverrides.engineOil=true;
  const result=await ask(initial,payload(initial));

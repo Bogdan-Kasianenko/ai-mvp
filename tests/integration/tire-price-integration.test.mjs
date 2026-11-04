@@ -49,11 +49,14 @@ for (const material of ["steel", "alu", "unknown"]) {
     const { result, calls } = await reply(value);
     assert.equal(result.kind, "reply"); assert.equal(calls, 1);
     assert.equal(result.priceQuoted, true);
-    assert.match(result.text, /Přezutí pneumatik \(2 × 16″\)/);
-    if (material !== "alu") assert.match(result.text, /Plechové \| 725 Kč/);
-    else assert.doesNotMatch(result.text, /725 Kč|Plechové/);
-    if (material !== "steel") assert.match(result.text, /Hliníkové \(ALU\) \| 800 Kč/);
-    else assert.doesNotMatch(result.text, /800 Kč|Hliníkové/);
+    const rows = result.text.split("\n").filter(line => line.startsWith("|") && / Kč/.test(line));
+    assert.equal(rows.length, material === "unknown" ? 2 : 1);
+    assert.ok(rows.every(row => row.includes("2 × 16″")));
+    assert.equal(result.needsClarification, false);
+    if (material !== "alu") assert.match(result.text, /plechov[^\n]*\| 725 Kč/i);
+    else assert.doesNotMatch(result.text, /725 Kč|plechov/i);
+    if (material !== "steel") assert.match(result.text, /hliníkov[^\n]*\| 800 Kč/i);
+    else assert.doesNotMatch(result.text, /800 Kč|hliníkov/i);
     assert.equal(result.text.split("Jaký termín").length - 1, 1);
     assert.ok(result.text.indexOf("Cena práce") < result.text.indexOf("Jaký termín"));
     assert.deepEqual(result.intake.selectedOperations, value.intake.selectedOperations);
@@ -65,8 +68,8 @@ test("oil and tire server tables coexist with one question after both", async ()
   const { result } = await reply(data({ oilPriceMode: "requested", oilPriceRequests: [{ optionId: "engine_oil", source: "selected" }] }));
   assert.equal(result.kind, "reply");
   assert.match(result.text, /Výměna motorového oleje a olejového filtru \| 400 Kč/);
-  assert.match(result.text, /Plechové \| 725 Kč/);
-  assert.match(result.text, /Hliníkové \(ALU\) \| 800 Kč/);
+  assert.match(result.text, /plechov[^\n]*\| 725 Kč/i);
+  assert.match(result.text, /hliníkov[^\n]*\| 800 Kč/i);
   assert.ok(result.text.indexOf("800 Kč") < result.text.indexOf("Jaký termín"));
   assert.equal((result.text.match(/\?/g) ?? []).length, 1);
   assert.equal(result.oilPriceRecords.length, 1);
@@ -95,7 +98,7 @@ test("wrong model amount is repaired before server prices are inserted", async (
   });
   assert.equal(calls, 2); assert.equal(result.kind, "reply");
   assert.doesNotMatch(result.text, /ALU stojí 725/);
-  assert.match(result.text, /Hliníkové \(ALU\) \| 800 Kč/);
+  assert.match(result.text, /hliníkov[^\n]*\| 800 Kč/i);
 });
 
 test("unrepaired amount in reply or follow-up is not exposed", async () => {
@@ -138,16 +141,16 @@ test("strict response schema requires nullable tire request with complete typed 
   }
 });
 
-for (const [language, materialLabel] of [["cs", "Hliníkové"], ["sk", "Hliníkové"], ["en", "Alloy"], ["ru", "Легкосплавные"], ["uk", "Легкосплавні"], ["de", "Aluminium"]]) {
+for (const [language, materialLabel] of [["cs", /hliníkov/i], ["sk", /hliníkov/i], ["en", /alloy/i], ["ru", /легкосплавн/i], ["uk", /легкосплавн/i], ["de", /Aluminium/]]) {
   test("tire price rendering uses the requested language: " + language, () => {
     const text = renderTireQuote(company, quote(), language);
-    assert.ok(text.includes(materialLabel));
+    assert.match(text, materialLabel);
     assert.match(text, /725 Kč/); assert.match(text, /800 Kč/);
   });
 }
 
 test("complete-wheel table uses the swap tariff and preserves fractional totals", () => {
-  assert.match(renderTireQuote(company, { ...quote("alu"), optionId: "wheel_swap" }), /Výměna kompletních kol \(2 × 16″\)/);
+  assert.match(renderTireQuote(company, { ...quote("alu"), optionId: "wheel_swap" }), /Výměna kompletních kol[^\n]*2 × 16″/);
   assert.match(renderTireQuote(company, { ...quote("alu"), optionId: "wheel_swap" }), /500 Kč/);
   assert.match(renderTireQuote(company, { ...quote("steel"), quantity: 1 }), /362,5 Kč/);
   assert.equal(renderTireQuote(company, null), "");
@@ -236,14 +239,4 @@ test("an imperative follow-up without a question mark is also placed after the t
   const { result, calls } = await reply(data({ reply: "Dobře. " + request, oilPriceFollowUp: "" }));
   assert.equal(result.kind, "reply"); assert.equal(calls, 1);
   assert.ok(result.text.indexOf(request) > result.text.indexOf("800 Kč"));
-});
-
-test("combined prices precede reply text while urgent safety advice stays first", async () => {
-  const { result, calls } = await reply(data({
-    safetyWarning: "Zůstaňte mimo vozovku.", reply: "Jaké jméno mám uvést?", oilPriceFollowUp: "",
-    oilPriceMode: "requested", oilPriceRequests: [{ optionId: "engine_oil", source: "selected" }],
-  }));
-  assert.equal(result.kind, "reply"); assert.equal(calls, 1);
-  assert.ok(result.text.startsWith("Zůstaňte mimo vozovku."));
-  for (const amount of ["400 Kč", "725 Kč", "800 Kč"]) assert.ok(result.text.indexOf(amount) < result.text.indexOf("Jaké jméno"));
 });

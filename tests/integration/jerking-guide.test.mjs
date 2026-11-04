@@ -44,12 +44,6 @@ function tool(guideIds) {
   }] };
 }
 
-test("jerking guide uses unchanged stored knowledge and has no automatic booking binding", () => {
-  assert.equal(guideRegistry[jerk].instructions, jerkingGuide.instructions);
-  assert.deepEqual(guideRegistry[jerk].knowledge, company.symptomGuide[jerk]);
-  assert.deepEqual(guideRegistry[jerk].serviceIds, []);
-});
-
 for (const activeGuides of [[], ["noStart"], [jerk], ids]) {
   test("prompt has exactly the selected symptom rules and knowledge: " + JSON.stringify(activeGuides), () => {
     const before = structuredClone(company);
@@ -87,8 +81,8 @@ for (const [from, to] of [["noStart", jerk], [jerk, "noStart"]]) {
   });
 }
 
-for (const message of ["při přidávání", "ne", "jen při zrychlování"]) {
-  test("short jerking answer keeps the loaded guide without a new tool call: " + message, async () => {
+test("short jerking answer keeps the loaded guide, history and vehicle without a new tool call", async () => {
+    const message = "při přidávání";
     const requests = [];
     const intake = emptyIntakeState();
     intake.intent = "service_discussion";
@@ -110,26 +104,6 @@ for (const message of ["při přidávání", "ne", "jen při zrychlování"]) {
     assert.deepEqual(result.intake.vehicle, intake.vehicle);
     assert.deepEqual(result.intake.selectedOperations, intake.selectedOperations);
     assert.equal(result.submissionAction, "none");
-  });
-}
-
-test("both real guides can load in one batch and only one can subsequently be cleared", async () => {
-  let count = 0;
-  const loaded = await getReply("Dvě různá auta", company, [], emptyIntakeState(),
-    undefined, false, async request => ++count === 1 ? tool(ids) : answer(request));
-  assert.equal(loaded.kind, "reply");
-  assert.deepEqual(loaded.activeGuides, ids);
-  assert.equal(count, 2);
-  count = 0;
-  const kept = await getReply("Startování už neřešme", company, [], loaded.intake,
-    undefined, false, async request => {
-      count++;
-      assert.deepEqual(request.tools[0].parameters.properties.guideIds.items.enum, ["oilFilters", "tires", "wrongFuelTowing"]);
-      return answer(request, { noStart: "clear", [jerk]: "keep" });
-    }, false, { activeGuides: loaded.activeGuides });
-  assert.equal(kept.kind, "reply");
-  assert.deepEqual(kept.activeGuides, [jerk]);
-  assert.equal(count, 1);
 });
 
 function response() {

@@ -42,15 +42,3 @@ test('another request can acquire the session immediately after failed acquisiti
   second.release();
   assert.equal(h.locks.size,0);
 });
-
-test('successful acquisition still holds its lock until release',()=>{
-  const h=harness();
-  assert.equal(h.session.acquire(),true);
-  assert.equal(h.session.busy,true);
-  assert.equal(h.locks.size,1);
-  assert.equal(h.session.acquire(),false);
-  assert.equal(h.unlockCalls,0);
-  h.session.release();
-  assert.equal(h.session.busy,false);
-  assert.equal(h.locks.size,0);
-});

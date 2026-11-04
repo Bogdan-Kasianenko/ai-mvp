@@ -279,12 +279,6 @@ test("durable lease excludes a second store instance", () => {
   b.release();
   repo.close();
 });
-test("rate budget is shared across store users", () => {
-  const repo = createRepository();
-  assert.equal(repo.allow("test", 1, 60000), true);
-  assert.equal(repo.allow("test", 1, 60000), false);
-  repo.close();
-});
 test("server reset invalidates pending consent and clears server-owned history", () => {
   const repo = createRepository(),
     s = prepared(repo),
@@ -327,6 +321,12 @@ function modelPayload() {
 }
 test("runtime schema rejects extra properties, wrong enums and malformed nested intake", () => {
   const good = modelPayload();
+  for (const [field, invalid] of [["keepClosedDay", "false"], ["statusFollowUp", false]]) {
+    const missing = {...good};
+    delete missing[field];
+    assert.equal(validateModelResponse(missing), false, field + " is required");
+    assert.equal(validateModelResponse({...good, [field]: invalid}), false, field + " has a strict type");
+  }
   assert.equal(validateModelResponse(good), true);
   assert.equal(
     validateModelResponse({ ...good, submissionAction: "send_now" }),

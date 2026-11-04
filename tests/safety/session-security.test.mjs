@@ -421,13 +421,6 @@ test("clarification cancels the prior send token", async () => {
   assert.equal(h.sent.length, 0);
 });
 
-test("status follow-up is an explicit required field in the model schema", async () => {
-  const { intakeResponseSchema } = await import("../../intake.mjs");
-  assert.equal(intakeResponseSchema.properties.statusFollowUp.type, "string");
-  assert.ok(intakeResponseSchema.required.includes("statusFollowUp"));
-  assert.equal(intakeResponseSchema.additionalProperties, false);
-});
-
 test("mileage clarification preserves the sent status without changing the delivered snapshot", async () => {
   const h = makeHarness();
   const offer = await h.offer();

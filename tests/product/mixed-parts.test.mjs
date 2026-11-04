@@ -95,9 +95,14 @@ test("the model receives operation-specific prices as well as both comparison bo
     return { status: "completed", output_text: JSON.stringify(withGuideActions(request, { safetyWarning: "", reply: "Děkuji.", language: "cs", priceQuoted: false, keepClosedDay: false, needsClarification: false, statusFollowUp: "", submissionAction: "none", intake: state, replyLead: "", tireUpdate: {reset:false,fields:[]}, operationsAction: "replace", vehicleAction: "keep", vehicleFields: [], partsAction: "keep", tirePriceRequest: null, oilPriceMode: "none", oilPriceRequests: [], oilPriceFollowUp: "" })) };
   });
   assert.equal(result.kind, "reply");
-  assert.ok(params.instructions.includes('"byOperation"'));
-  assert.ok(params.instructions.includes('"oil_filters:engine_oil":{"customerParts":true,"quote":{"kind":"labor_only","priceFromKc":500'));
-  assert.ok(params.instructions.includes('"oil_filters:lpg_filter":{"customerParts":false,"quote":{"kind":"labor_only","priceFromKc":400'));
+  const line = params.instructions.split("\n").find(value => value.startsWith("Ceníky: "));
+  const books = JSON.parse(line.slice("Ceníky: ".length));
+  assert.equal(books.byOperation["oil_filters:engine_oil"].customerParts, true);
+  assert.equal(books.byOperation["oil_filters:engine_oil"].quote.priceFromKc, 500);
+  assert.equal(books.byOperation["oil_filters:lpg_filter"].customerParts, false);
+  assert.equal(books.byOperation["oil_filters:lpg_filter"].quote.priceFromKc, 400);
+  assert.equal(books.serviceParts["oil_filters:engine_oil"].priceFromKc, 400);
+  assert.equal(books.customerParts["oil_filters:engine_oil"].priceFromKc, 500);
 });
 
 // Calendar fixtures below are evaluated relative to this fixed Prague date.

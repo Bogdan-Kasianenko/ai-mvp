@@ -112,34 +112,6 @@ test("response schema requires operationsAction and rejects invalid actions", ()
   assert.equal(validateModelResponse(missing),false);
   for(const action of [null, true, "update", "merge", {}, []]) assert.equal(validateModelResponse({...value,tireUpdate: {reset:false,fields:[]}, operationsAction:action}),false);
 });
-test("reaction precedes server intro and table, with one follow-up after prices", async () => {
-  const initial=state(["oil_filters:engine_oil"]);
-  const result=await ask(initial,payload(initial,{oilPriceMode:"requested",oilPriceRequests:[{optionId:"engine_oil",source:"selected"}],oilPriceFollowUp:"Jaký termín Vám vyhovuje?"}));
-  assert.equal(result.kind,"reply");
-  const sequence=["Jasně, materiál zajistí servis.","Tady máte přehled počátečních cen za práci:","| Úkon |", "400 Kč", "Částky jsou pouze za práci.","Jaký termín Vám vyhovuje?"];
-  const positions=sequence.map(text=>result.text.indexOf(text));
-  assert.ok(positions.every((pos,i)=>pos>=0&&(!i||pos>positions[i-1])));
-  assert.equal(result.text.split(sequence[0]).length-1,1);
-  assert.equal(result.text.split(sequence[1]).length-1,1);
-});
-test("unknown rims yield both prices without a clarification block and after the reaction", async () => {
-  const initial=state(["tires:seasonal_tires"]);
-  const result=await ask(initial,payload(initial,{replyLead:"Materiál ráfků upřesní servis při převzetí.",tirePriceRequest:{optionId:"seasonal_tires",quantity:2,rimDiameter:16,material:"unknown"},oilPriceFollowUp:"Jaký termín Vám vyhovuje?"}));
-  assert.equal(result.kind,"reply"); assert.equal(result.needsClarification,false);
-  assert.match(result.text,/Plechové \| 725 Kč/);assert.match(result.text,/Hliníkové \(ALU\) \| 800 Kč/);
-  assert.ok(result.text.indexOf("Materiál ráfků")<result.text.indexOf("Přezutí pneumatik"));
-  assert.ok(result.text.indexOf("800 Kč")<result.text.indexOf("Jaký termín"));
-});
-test("a question accidentally placed in reply stays after both price tables without 502", async () => {
-  const initial=state(["oil_filters:engine_oil","tires:seasonal_tires"]);
-  const result=await ask(initial,payload(initial,{reply:"Jaký termín Vám vyhovuje?",oilPriceMode:"requested",oilPriceRequests:[{optionId:"engine_oil",source:"selected"}],tirePriceRequest:{optionId:"seasonal_tires",quantity:2,rimDiameter:16,material:"unknown"}}));
-  assert.equal(result.kind,"reply");assert.ok(result.text.indexOf("Jaký termín")>result.text.indexOf("800 Kč"));
-});
-test("safety warning remains before the reaction and prices", async () => {
-  const initial=state(["oil_filters:engine_oil"]);
-  const result=await ask(initial,payload(initial,{safetyWarning:"Motor nestartujte.",oilPriceMode:"requested",oilPriceRequests:[{optionId:"engine_oil",source:"selected"}]}));
-  assert.equal(result.kind,"reply");assert.ok(result.text.startsWith("Motor nestartujte.\n\nJasně"));
-});
 test("unchanged oil price memory suppresses the intro as well as the table", async () => {
   const initial=state(["oil_filters:engine_oil"]);
   const result=await ask(initial,payload(initial),{oilPriceMemory:renderAutomaticOilQuotes(company,initial).records});

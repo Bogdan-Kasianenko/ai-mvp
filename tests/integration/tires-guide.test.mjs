@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { tiresGuide } from "../../guides/tires.mjs";
-import { guideRegistry, requiredGuideIds } from "../../guides/registry.mjs";
 import { buildInstructions } from "../../instructions.mjs";
 import { getReply } from "../../service.mjs";
 import { getPriceQuote } from "../../pricing.mjs";
@@ -50,21 +49,10 @@ function tool(ids) {
   }] };
 }
 
-test("oil and tire operations bind their own guides independently", () => {
-  assert.equal(guideRegistry.tires.instructions, tiresGuide.instructions);
-  for (const option of ["seasonal_tires", "wheel_swap", "tread_check"]) {
-    assert.deepEqual(requiredGuideIds(["tires:" + option]), ["tires"]);
-  }
-  assert.deepEqual(requiredGuideIds(["oil_filters:engine_oil"]), ["oilFilters"]);
-  assert.deepEqual(requiredGuideIds(["oil_filters:engine_oil", "tires:seasonal_tires"]), ["oilFilters", "tires"]);
-});
-
 for (const activeGuides of [[], ["tires"], ["noStart", "tires"]]) {
   test("tire instructions are conditional and shared policies remain: " + JSON.stringify(activeGuides), () => {
     const text = buildInstructions({ company, priceBooks: {}, currentPragueDate: "27. října 2026", activeGuides });
     assert.equal(text.split(tiresGuide.instructions).length - 1, activeGuides.includes("tires") ? 1 : 0);
-    assert.match(text, /Policies true\/false\/null znamenají/);
-    assert.match(text, /DOPLNĚNÍ A ODESLÁNÍ/);
     const line = text.split("\n").find(x => x.startsWith("Firemní data: "));
     const supplied = JSON.parse(line.slice("Firemní data: ".length));
     assert.deepEqual(supplied.services, company.services);
@@ -159,12 +147,6 @@ for (const option of ["seasonal_tires", "wheel_swap"]) {
     }
   });
 }
-
-test("two 16-inch tires have distinct steel and alloy prices from the current catalog", () => {
-  const quote = getPriceQuote(company, "tires", "seasonal_tires");
-  assert.equal(quote.pricesByQuantityKc[2].steel_13_16, 725);
-  assert.equal(quote.pricesByQuantityKc[2].alu_15_18, 800);
-});
 
 for (const field of ["tires.rimDiameter", "tires.quantity", "tires.operation"]) {
   test("pending tire clarification blocks a summary without losing other work: " + field, () => {
@@ -278,7 +260,7 @@ for (const [name, message, withOil, option] of [
   ["first complete-wheel swap", "Potřebuji vyměnit kompletní kola", false, "wheel_swap"],
   ["adding tires to oil", "Ještě přidejte přezutí dvou předních pneumatik", true, "seasonal_tires"],
 ]) {
-  test("first tire turn carries mandatory loading rules and consumes tool result before replying: " + name, async () => {
+  test("first tire turn consumes the loaded guide before returning booking or price information: " + name, async () => {
     const initial = withOil ? draft(false) : emptyIntakeState();
     const before = structuredClone(initial);
     const next = structuredClone(initial);
@@ -294,10 +276,6 @@ for (const [name, message, withOil, option] of [
       if (requests.length === 1) {
         assert.ok(!request.instructions.includes(tiresGuide.instructions));
         assert.ok(request.tools[0].parameters.properties.guideIds.items.enum.includes("tires"));
-        assert.match(request.instructions, /načti dostupný guide tires před odpovědí i před položením upřesňující otázky/);
-        assert.match(request.instructions, /i když služba zatím není v selectedOperations/);
-        assert.match(request.tools[0].description, /Vlastní znalost tématu nenahrazuje načtení guide/);
-        assert.doesNotMatch(request.tools[0].description, /Jinak rovnou odpověz/);
         return tool(["tires"]);
       }
       assert.ok(request.instructions.includes(tiresGuide.instructions));

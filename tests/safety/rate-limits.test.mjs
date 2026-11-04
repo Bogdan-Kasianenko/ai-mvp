@@ -40,20 +40,28 @@ function harness(repo) {
   };
 }
 
-test("IP quota covers new cookies and persists after repository restart", async () => {
+test("chat IP quota is shared across existing cookies and persists after repository restart", async () => {
   const dir = mkdtempSync(join(tmpdir(), "caro-rate-"));
   const path = join(dir, "test.sqlite");
   let repo = createRepository(path);
   try {
     let h = harness(repo);
-    for (let i = 0; i < 30; i++) assert.notEqual((await h.call()).code, 429);
+    const first = await h.call();
+    assert.notEqual(first.code, 429);
+    const second = createChatSessionStore({repository: repo})(
+      {headers: {}, ip: "test", secure: false}, {cookie() {}, set() {}},
+    );
+    for (let i = 1; i < 30; i++) {
+      assert.notEqual((await h.call("test", i % 2 ? second.id : first.id)).code, 429);
+    }
     assert.equal(h.calls, 30);
+    assert.equal(repo.sessionCount(), 2, "session creation quota must not mask the chat quota");
     repo.close();
     repo = createRepository(path);
     h = harness(repo);
-    assert.equal((await h.call()).code, 429);
+    assert.equal((await h.call("test", first.id)).code, 429);
     assert.equal(h.calls, 0);
-    assert.notEqual((await h.call("different-ip")).code, 429);
+    assert.notEqual((await h.call("different-ip", first.id)).code, 429);
     assert.equal(h.calls, 1);
   } finally { repo.close(); rmSync(dir, { recursive: true, force: true }); }
 });
@@ -62,8 +70,11 @@ test("global quota blocks the 121st model call across different IPs", async () =
   const repo = createRepository();
   try {
     const h = harness(repo);
-    for (let i = 0; i < 120; i++) assert.notEqual((await h.call(`ip-${i}`)).code, 429);
-    assert.equal((await h.call("new-ip")).code, 429);
+    const first = await h.call("ip-0");
+    assert.notEqual(first.code, 429);
+    for (let i = 1; i < 120; i++) assert.notEqual((await h.call(`ip-${i}`, first.id)).code, 429);
+    assert.equal(repo.sessionCount(), 1, "session creation quota must not mask the chat quota");
+    assert.equal((await h.call("new-ip", first.id)).code, 429);
     assert.equal(h.calls, 120);
     assert.equal(repo.activeCount(), 0);
   } finally { repo.close(); }

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
-import { guideRegistry, normalizeGuideIds, readActiveGuideIds, requiredGuideIds } from "../../guides/registry.mjs";
+import { normalizeGuideIds, readActiveGuideIds, requiredGuideIds } from "../../guides/registry.mjs";
 import { respondWithGuides } from "../../guides/guide-tools.mjs";
 import { emptyIntakeState, intakeResponseSchema, validateModelResponse } from "../../intake.mjs";
 import { getReply } from "../../service.mjs";
@@ -46,9 +46,13 @@ function tool(ids) {
   }] };
 }
 
-test("production registry binds oil and tires while diagnostics does not imply a symptom guide", () => {
-  assert.deepEqual(Object.keys(guideRegistry).sort(), ["jerkingDuringAcceleration", "noStart", "oilFilters", "tires", "wrongFuelTowing"]);
-  assert.deepEqual(requiredGuideIds(["diagnostics:", "oil_filters:engine_oil"]), ["oilFilters"]);
+test("selected services bind their guides while generic diagnostics does not select a symptom", () => {
+  // Assert routing behavior, not the exact registry size or property order.
+  assert.deepEqual(requiredGuideIds(["diagnostics:"]), []);
+  assert.deepEqual(requiredGuideIds(["oil_filters:engine_oil", "oil_filters:lpg_filter"]), ["oilFilters"]);
+  assert.deepEqual(requiredGuideIds(["tires:seasonal_tires", "tires:wheel_swap", "tires:tread_check"]), ["tires"]);
+  assert.deepEqual(requiredGuideIds(["oil_filters:engine_oil", "tires:seasonal_tires"]), ["oilFilters", "tires"]);
+  assert.deepEqual(requiredGuideIds(["towing:"]), ["wrongFuelTowing"]);
 });
 
 test("guide normalization rejects unknown, inherited, path and non-string IDs and deduplicates", () => {

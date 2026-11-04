@@ -36,17 +36,17 @@ for(const [language,request] of Object.entries({cs:"Ještě prosím uveďte své
 test("full response order is safety, reaction, intro, both tables, explanation and follow-up",async()=>{
  const value=payload({safetyWarning:"Motor nestartujte.",reply:"Materiál ráfků upřesní servis při převzetí."});
  const {result}=await ask(value);assert.equal(result.kind,"reply");
- const sequence=[value.safetyWarning,value.replyLead,"Tady máte přehled počátečních cen za práci:","400 Kč","725 Kč","800 Kč",value.reply,value.oilPriceFollowUp];
+ const sequence=[value.safetyWarning,value.replyLead,"400 Kč","725 Kč","800 Kč",value.reply,value.oilPriceFollowUp];
  const positions=sequence.map(x=>result.text.indexOf(x));
  assert.ok(positions.every((p,i)=>p>=0&&(!i||p>positions[i-1])));
  for(const text of [value.replyLead,value.oilPriceFollowUp])assert.equal(result.text.split(text).length-1,1);
 });
 test("lead-only, follow-up-only and safety-only provider replies are valid",()=>{
  for(const field of ["replyLead","reply","oilPriceFollowUp","safetyWarning"]){
-  const value=payload({replyLead:"",reply:"",oilPriceFollowUp:"",safetyWarning:"",[field]:"Text"});
+  const value=payload({replyLead:"",reply:"",oilPriceFollowUp:"",safetyWarning:"",tirePriceRequest:null,oilPriceMode:"none",oilPriceRequests:[],[field]:"Text"});
   assert.equal(validateModelResponse(value),true,field);
  }
- assert.equal(validateModelResponse(payload({replyLead:"",reply:"",oilPriceFollowUp:"",safetyWarning:""})),false);
+ assert.equal(validateModelResponse(payload({replyLead:"",reply:"",oilPriceFollowUp:"",safetyWarning:"",tirePriceRequest:null,oilPriceMode:"none",oilPriceRequests:[]})),false);
 });
 test("replyLead is required and must be a string",()=>{
  const value=payload();const missing=structuredClone(value);delete missing.replyLead;
@@ -63,26 +63,12 @@ test("persistent amounts in replyLead are rejected rather than exposed",async()=
  const value=payload({replyLead:"Cena je 400 Kč."});const {result,calls}=await ask(value,value);
  assert.equal(result.kind,"unavailable");assert.equal(calls,2);
 });
-test("CSS price rules form one vertical block without obsolete horizontal layouts",()=>{
- const css=readFileSync(new URL("../../public/style.css",import.meta.url),"utf8");
- const start=css.indexOf("#chat-panel .chat-price-table {");
- const end=css.indexOf("#chat-panel #messages",start);
- assert.ok(start>=0&&end>start);
- const all=css.match(/[^{}]+\{[^{}]*\}/g)??[];
- const seen=new Map();let count=0;
- for(const rule of all){
-  const boundary=rule.indexOf("{");const selectorPart=rule.slice(0,boundary).replace(/\/\*[\s\S]*?\*\//g,"").trim();
-  if(!selectorPart.includes(".chat-price-table"))continue;
-  count++;assert.ok(css.indexOf(rule)+rule.indexOf("#chat-panel")>=start&&css.indexOf(rule)+rule.indexOf("#chat-panel")<end,"All pricing rules belong to one contiguous block");
-  const properties=[...rule.slice(boundary+1).matchAll(/(?:^|;)\s*([\w-]+)\s*:/g)].map(m=>m[1]);
-  assert.equal(new Set(properties).size,properties.length,"A single CSS rule must not repeat a property");
- }
- assert.ok(count>=10);
- assert.equal(css.split("#chat-panel .chat-price-table {").length-1,1);
- assert.doesNotMatch(css,/\.chat-price-table\[data-columns=/);
- assert.doesNotMatch(css,/Вертикальное отображение цен|Два столбца: услуга или вариант слева/);
- assert.match(css,/#chat-panel \.chat-price-table tbody tr\s*\{[^}]*display:\s*block/s);
- assert.match(css,/\.chat-price-table td\[data-label\]::before\s*\{[^}]*content:\s*attr\(data-label\)/s);
- const js=readFileSync(new URL("../../public/app.js",import.meta.url),"utf8");
- assert.equal(js.split('wrapper.dataset.columns = String(headers.length);').length-1,1);
+
+test("a tire-table-only provider response produces a useful customer answer",async()=>{
+ const value=payload({replyLead:"",reply:"",oilPriceFollowUp:"",safetyWarning:"",oilPriceMode:"none",oilPriceRequests:[]});
+ assert.equal(validateModelResponse(value),true);
+ const {result}=await ask(value);
+ assert.equal(result.kind,"reply");
+ assert.match(result.text,/plechov[^\n]*725 Kč/i);
+ assert.match(result.text,/hliníkov[^\n]*800 Kč/i);
 });

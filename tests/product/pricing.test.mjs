@@ -73,3 +73,19 @@ test("unlisted services have no invented price", () => {
   assert.equal(getPriceQuote(company, "insurance_repairs"), null);
   assert.equal(getPriceQuote(company, "unknown"), null);
 });
+
+test("brake operations expose their own labor tariff without estimating materials", () => {
+  for (const [option, servicePrice, ownPrice] of [
+    ["brake_inspection", 400, 500],
+    ["brake_pads", 600, 700],
+    ["brake_discs", 800, 1000],
+    ["brake_discs_pads", 1200, 1500],
+    ["brake_fluid", 400, 500],
+  ]) {
+    const standard = getPriceQuote(company, "brakes", option);
+    const own = getPriceQuote(company, "brakes", option, company.laborRates.customerPartsKcPerHour);
+    assert.equal(standard.kind, "labor_only", option);
+    assert.equal(standard.priceFromKc, servicePrice, option);
+    assert.equal(own.priceFromKc, ownPrice, option);
+  }
+});

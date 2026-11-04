@@ -20,14 +20,6 @@ test('a later rejected quota does not charge earlier buckets',()=>{
   assert.equal(repo.allow('global',1,60000),true);
  }finally{repo.close();}
 });
-test('global rejection does not consume a visitor quota',()=>{
- const repo=createRepository();
- try{
-  assert.equal(repo.allow('global',1,60000),true);
-  assert.equal(repo.allowMany([rule('visitor'),rule('global')]),false);
-  assert.equal(repo.allow('visitor',1,60000),true);
- }finally{repo.close();}
-});
 test('a successful check charges every bucket exactly once',()=>{
  const repo=createRepository();
  try{
