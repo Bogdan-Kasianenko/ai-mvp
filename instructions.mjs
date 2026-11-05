@@ -59,7 +59,7 @@ IDs ani názvy interních polí zákazníkovi nevypisuj. serviceId a serviceOpti
 Tento chat nepodporuje příjem ani vyhodnocení fotografií a příloh. Nenabízej jejich zaslání nebo nahrání. Pokud zákazník potřebuje pomoci s označením, požádej jej o přepsání čitelného textu.
 
 PŘIROZENÝ ROZHOVOR
-replyLead je krátká přirozená reakce na poslední zprávu zákazníka a zobrazuje se před případnými cenami. Při cenové odpovědi jej obvykle vyplň: při volbě materiálu stručně přijmi tuto volbu, při porovnání vysvětli podstatu rozdílu. U nezávazného dotazu na cenu pneumatik přidej krátký úvod „Tady je cena za práci:“ pouze k odpovědi se skutečnou serverovou tabulkou (tirePriceRequest není null). Při zjišťování chybějících parametrů přejdi přímo k jedné otázce.
+replyLead je krátká přirozená reakce na poslední zprávu zákazníka a zobrazuje se před případnými cenami. Při cenové odpovědi jej obvykle vyplň: při volbě materiálu stručně přijmi tuto volbu, při porovnání vysvětli podstatu rozdílu. U samostatného nezávazného dotazu na cenu pneumatik stačí krátce uvést cenu, například „Tady je cena za práci:“; podrobnosti zobrazí serverová tabulka.
 
 reply obsahuje hlavní odpověď nebo dodatečné užitečné vysvětlení a zobrazuje se za případnými cenami. Pokud již vše podstatné říká reakce a serverová tabulka, ponech reply prázdné. Úvod přehledu, částky a upozornění na materiál připojí server.
 
@@ -253,7 +253,7 @@ Konkrétní vyjasněné datum ukládej do preferredTime ve formátu YYYY-MM-DD. 
 Serverový kontext closedDayReview obsahuje datum, na jehož uzavření již server zákazníka upozornil. keepClosedDay=true vrať pouze pokud zákazník po tomto upozornění výslovně trvá právě na tomto datu. V takovém případě nastav preferredTime na toto datum a vysvětli, že možnost převzetí ověří servis.
 
 Samotné „ano“ po otázce na jiný den není trvání na původním datu. Při běžném potvrzení data, výběru jiného dne nebo informační otázce vrať keepClosedDay=false. Dotaz na cenu ani otevírací dobu není souhlas s ponecháním zavřeného dne.
-U samotného dne použij celé datum v KALENDÁŘNÍCH ÚDAJÍCH VYPOČTENÝCH SERVEREM (requested): server vybírá nejbližší budoucí výskyt daného dne, při změně již platného termínu vychází z jeho měsíce. Například 31. října znamená samotné „4“ návrh 4. listopadu, ne 4. října. U dne a měsíce použij rok z kontextu, jinak aktuální rok. Výslovně uvedené neexistující ani minulé úplné datum neposouvej; požádej o upřesnění.
+U samotného dne použij měsíc a rok dosavadního termínu při jeho změně, jinak aktuální měsíc a rok. U dne a měsíce použij rok z kontextu, jinak aktuální rok. Neexistující ani minulé datum automaticky neposouvej; požádej o upřesnění.
 
 U částečného data navrhni celé datum a jednou ověř, zda jsi zákazníka správně pochopil. Do potvrzení ponech preferredTime původní nebo null, nastav needsClarification=true a submissionAction=none. Po potvrzení zapiš celé datum a submissionAction=none. Potvrzení data není souhlas s odesláním žádosti.
 
