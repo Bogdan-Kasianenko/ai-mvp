@@ -1,8 +1,6 @@
+import { temporaryRepository } from "../helpers/temporary-repository.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync} from 'node:fs';
-import {tmpdir} from 'node:os';
-import {join} from 'node:path';
 import {EventEmitter} from 'node:events';
 import {DatabaseSync} from 'node:sqlite';
 import {createRepository} from '../../storage.mjs';
@@ -23,7 +21,7 @@ function seed(path,rows){
   db.exec('COMMIT');
  }finally{db.close();}
 }
-function database(){const dir=mkdtempSync(join(tmpdir(),'caro-empty-lifecycle-'));return{path:join(dir,'test.sqlite'),remove(){rmSync(dir,{recursive:true,force:true});}};}
+
 
 test('reset near the end of an empty session grants five new minutes without polling extensions',t=>{
  let now=start;t.mock.method(Date,'now',()=>now);const repo=createRepository();
@@ -62,7 +60,7 @@ test('the first user message after reset restores the normal twenty-four-hour co
  }finally{repo.close();}
 });
 test('opening an old database frees capacity occupied by a thousand expired legacy empty sessions',t=>{
- t.mock.method(Date,'now',()=>start);const file=database();let repo;
+ t.mock.method(Date,'now',()=>start);const file=temporaryRepository();let repo;
  try{
   seed(file.path,Array.from({length:1000},(_,i)=>legacy('old-'+i,start-600000+day)));
   repo=createRepository(file.path);assert.equal(repo.sessionCount(),0);
@@ -70,7 +68,7 @@ test('opening an old database frees capacity occupied by a thousand expired lega
  }finally{repo?.close();file.remove();}
 });
 test('fresh legacy empty sessions receive a persistent deadline that another restart cannot extend',t=>{
- let now=start;t.mock.method(Date,'now',()=>now);const file=database();let repo;
+ let now=start;t.mock.method(Date,'now',()=>now);const file=temporaryRepository();let repo;
  try{
   seed(file.path,[legacy('fresh',start+day,{previousDelivery:'old-request',restarted:true})]);
   repo=createRepository(file.path);const first=repo.load('fresh');
@@ -80,7 +78,7 @@ test('fresh legacy empty sessions receive a persistent deadline that another res
  }finally{repo?.close();file.remove();}
 });
 test('migration preserves an already shorter deadline rather than giving an empty session more time',t=>{
- let now=start;t.mock.method(Date,'now',()=>now);const file=database();let repo;
+ let now=start;t.mock.method(Date,'now',()=>now);const file=temporaryRepository();let repo;
  try{
   seed(file.path,[legacy('short',start+day,{emptyExpiresAt:start+60000})]);
   repo=createRepository(file.path);assert.equal(repo.load('short').expiresAt,start+60000);
@@ -88,7 +86,7 @@ test('migration preserves an already shorter deadline rather than giving an empt
  }finally{repo?.close();file.remove();}
 });
 test('migration respects active leases and revisits empty legacy rows once the lease expires',t=>{
- let now=start;t.mock.method(Date,'now',()=>now);const file=database();let repo;
+ let now=start;t.mock.method(Date,'now',()=>now);const file=temporaryRepository();let repo;
  try{
   const expires=start-600000+day;
   seed(file.path,[legacy('leased',expires,{lockedUntil:start+120000})]);
@@ -98,7 +96,7 @@ test('migration respects active leases and revisits empty legacy rows once the l
  }finally{repo?.close();file.remove();}
 });
 test('migration keeps real history, current deliveries and pending processing unchanged',t=>{
- t.mock.method(Date,'now',()=>start);const file=database();let repo;
+ t.mock.method(Date,'now',()=>start);const file=temporaryRepository();let repo;
  try{
   const rows=[legacy('history',start+day,{history:[{role:'user',content:'Keep this'}]}),legacy('delivery',start+day,{lastDelivery:'current-request'}),legacy('pending',start+day,{pendingRequest:{id:'processing'}})];
   seed(file.path,rows);repo=createRepository(file.path);

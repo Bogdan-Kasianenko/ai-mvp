@@ -1,5 +1,5 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   emptyIntakeState,
@@ -8,7 +8,7 @@ import {
   normalizeIntakeState
 } from "../../intake.mjs";
 
-const company = JSON.parse(readFileSync(new URL("../../company.json", import.meta.url), "utf8"));
+const company = createTestCompany();
 
 test("brake pad request keeps discs separate and optional details do not block intake", () => {
   const state = normalizeIntakeState({

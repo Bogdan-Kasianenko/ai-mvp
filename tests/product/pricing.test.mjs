@@ -1,9 +1,9 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import test from "node:test";
 import { getPriceBook, getPriceQuote, withPublicPrices } from "../../pricing.mjs";
 
-const company = JSON.parse(readFileSync(new URL("../../company.json", import.meta.url), "utf8"));
+const company = createTestCompany();
 
 test("oil quote contains labor only, without vehicle class or oil price", () => {
   assert.deepEqual(getPriceQuote(company, "oil_filters", "engine_oil"), {

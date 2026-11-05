@@ -1,11 +1,11 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import { renderAutomaticOilQuotes } from "../../oil-quotes.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { renderTireQuote } from "../../tire-prices.mjs";
 import { getReply } from "../../service.mjs";
 import { emptyIntakeState, validateModelResponse } from "../../intake.mjs";
-const company = JSON.parse(readFileSync(new URL("../../company.json", import.meta.url), "utf8"));
+const company = createTestCompany();
 const quote = (material = "unknown") => ({ optionId: "seasonal_tires", quantity: 2, rimDiameter: 16, material });
 function state() {
   const intake = emptyIntakeState();

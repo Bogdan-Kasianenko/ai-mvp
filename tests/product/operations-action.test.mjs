@@ -1,11 +1,12 @@
+import { createModelResponse } from "../fixtures/model-response.mjs";
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { getReply } from "../../service.mjs";
 import { emptyIntakeState, validateModelResponse } from "../../intake.mjs";
 import { renderAutomaticOilQuotes } from "../../oil-quotes.mjs";
 
-const company = JSON.parse(readFileSync(new URL("../../company.json", import.meta.url), "utf8"));
+const company = createTestCompany();
 const five = ["engine_oil", "air_filter", "cabin_filter", "fuel_filter", "lpg_filter"].map(id => "oil_filters:" + id);
 function state(operations = five) {
   const value = emptyIntakeState();
@@ -15,7 +16,7 @@ function state(operations = five) {
   return value;
 }
 function payload(next, extra = {}) {
-  return {safetyWarning:"", reply:"", language:"cs", priceQuoted:false, replyLead: "Jasně, materiál zajistí servis.", tireUpdate: {reset:false,fields:[]}, operationsAction:"keep", vehicleAction:"keep", vehicleFields: [], partsAction:"keep", oilPriceMode:"none", oilPriceRequests:[], tirePriceRequest:null, oilPriceFollowUp:"", keepClosedDay:false, needsClarification:false, statusFollowUp:"", intake:structuredClone(next), submissionAction:"none", ...extra};
+  return createModelResponse(next, { reply: "", replyLead: "Jasně, materiál zajistí servis.", operationsAction: "keep", ...extra });
 }
 async function ask(initial, value, context = {}) {
   return getReply("Test", company, [], initial, undefined, false, async request => {

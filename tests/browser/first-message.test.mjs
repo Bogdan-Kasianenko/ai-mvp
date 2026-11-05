@@ -1,3 +1,4 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -7,7 +8,7 @@ import {createRepository} from '../../storage.mjs';
 import {createChatSessionStore} from '../../chat-session.mjs';
 import {createChatHandler,createSessionHandler} from '../../chat-route.mjs';
 import {emptyIntakeState} from '../../intake.mjs';
-const company=JSON.parse(readFileSync(new URL('../../company.json',import.meta.url),'utf8'));
+const company = createTestCompany();
 const userEntry={id:'prior-user',role:'user',content:'Earlier question',at:'2026-10-20T08:00:00.000Z'};
 function browserSubmit({initial={},after={},sync,post}={}) {
  const app=readFileSync(new URL('../../public/app.js',import.meta.url),'utf8');

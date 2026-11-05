@@ -1,12 +1,12 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import { withGuideActions } from "../helpers/model-response.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
 import {emptyIntakeState,missingIntakeFields} from '../../intake.mjs';
 import {getReply} from '../../service.mjs';
 import {partSource} from '../../parts-supply.mjs';
 
-const company=JSON.parse(readFileSync(new URL('../../company.json',import.meta.url),'utf8'));
+const company = createTestCompany();
 function draft(source){
  const state=emptyIntakeState();
  Object.assign(state,{intent:'service_request',selectedOperations:['oil_filters:engine_oil'],serviceId:'oil_filters',serviceOptionId:'engine_oil',requestedWork:'Výměna oleje a olejového filtru',oilFilterScopeReviewed:true,customerParts:source});

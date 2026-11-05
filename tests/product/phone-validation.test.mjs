@@ -1,13 +1,13 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import { withGuideActions } from "../helpers/model-response.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
 import {inspectPhone, normalizePhone, phoneInputContext} from '../../phone-contact.mjs';
 import {emptyIntakeState, hasValidContact, missingIntakeFields} from '../../intake.mjs';
 import {readyToSend} from '../../request-flow.mjs';
 import {getReply} from '../../service.mjs';
 
-const company=JSON.parse(readFileSync(new URL('../../company.json',import.meta.url),'utf8'));
+const company = createTestCompany();
 function draft(){
  const state=emptyIntakeState();
  Object.assign(state,{intent:'service_request',selectedOperations:['oil_filters:engine_oil'],serviceId:'oil_filters',serviceOptionId:'engine_oil',requestedWork:'Výměna oleje a filtru',customerParts:true,oilFilterScopeReviewed:true,additionalServicesReviewed:true,preferredTime:'2099-10-26'});

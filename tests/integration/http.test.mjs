@@ -1,6 +1,6 @@
+import { startHttpServer } from "../helpers/http-server.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { once } from "node:events";
 import { createApp } from "../../app.mjs";
 import { createChatSessionStore } from "../../chat-session.mjs";
 import { emptyIntakeState } from "../../intake.mjs";
@@ -63,9 +63,8 @@ test("HTTP workflow: trusted collection, price detour, consent, status, reload a
     },
     sessionOptions: { getSession: store },
   });
-  const server = app.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const url = "http://127.0.0.1:" + server.address().port;
+  const server = await startHttpServer(app);
+  const { url } = server;
   let cookie;
   async function call(path, body, extra = {}) {
     const response = await fetch(url + path, {
@@ -146,7 +145,6 @@ test("HTTP workflow: trusted collection, price detour, consent, status, reload a
     ])
       assert.equal((await fetch(url + path)).status, 404);
   } finally {
-    server.closeAllConnections();
-    await new Promise((resolve) => server.close(resolve));
+    await server.close();
   }
 });

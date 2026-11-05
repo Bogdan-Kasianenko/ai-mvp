@@ -1,13 +1,13 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import { withGuideActions } from "../helpers/model-response.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
 import {getReply} from '../../service.mjs';
 import {emptyIntakeState,normalizeIntakeState} from '../../intake.mjs';
 import {presentRequestStep,readyToSend} from '../../request-flow.mjs';
 import {buildRequestEmail} from '../../mailer.mjs';
 
-const company=JSON.parse(readFileSync(new URL('../../company.json',import.meta.url),'utf8'));
+const company = createTestCompany();
 for(const available of [true,false,null]){
  test(`replacement vehicle FAQ passes authoritative availability=${available} and unknown price to the model`,async()=>{
   const data=structuredClone(company);

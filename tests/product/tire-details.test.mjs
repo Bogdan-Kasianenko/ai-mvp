@@ -1,6 +1,8 @@
+import { fakeModelResponse as answer } from "../helpers/fake-model.mjs";
+import { createModelResponse } from "../fixtures/model-response.mjs";
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { emptyTireDetails, normalizeTireDetails, mergeTireDetails, missingTireDetails, tireQuoteRequest } from "../../tire-details.mjs";
 import { emptyIntakeState, normalizeIntakeState, missingIntakeFields, validateModelResponse } from "../../intake.mjs";
@@ -10,7 +12,7 @@ import { createChatHandler, createSessionHandler } from "../../chat-route.mjs";
 import { createChatSessionStore, prepareConfirmation, confirmationMatches, draftFingerprint } from "../../chat-session.mjs";
 import { createRepository } from "../../storage.mjs";
 import { renderAutomaticOilQuotes } from "../../oil-quotes.mjs";
-const company=JSON.parse(readFileSync(new URL("../../company.json",import.meta.url),"utf8"));
+const company = createTestCompany();
 const known={optionId:"seasonal_tires",quantity:2,rimDiameter:16,material:"alu"};
 function complete(withTires=false){
  const s=emptyIntakeState(),date=new Date();date.setUTCDate(date.getUTCDate()+14+((8-date.getUTCDay())%7));
@@ -18,8 +20,10 @@ function complete(withTires=false){
  Object.assign(s.vehicle,{brand:"Suzuki",model:"Swift",year:"2018",engine:"1,3 l",fuel:"benzín"});Object.assign(s.customer,{name:"Test",email:"test@example.com"});
  if(withTires)s.tires={...known};return s;
 }
-function payload(next,extra={}){return {safetyWarning:"",replyLead:"Jasně.",reply:"",language:"cs",priceQuoted:false,operationsAction:"keep",vehicleAction:"keep", vehicleFields: [],partsAction:"keep",tireUpdate:{reset:false,fields:[]},oilPriceMode:"none",oilPriceRequests:[],tirePriceRequest:null,oilPriceFollowUp:"",keepClosedDay:false,needsClarification:false,statusFollowUp:"",intake:structuredClone(next),submissionAction:"none",...extra};}
-function answer(request,value){const x=structuredClone(value),actions=request.text.format.schema.properties.guideActions?.properties;if(actions)x.guideActions=Object.fromEntries(Object.keys(actions).map(id=>[id,"keep"]));return{status:"completed",output:[],output_text:JSON.stringify(x)};}
+function payload(next,extra={}){
+  return createModelResponse(next, { reply: "", replyLead: "Jasně.", operationsAction: "keep", ...extra });
+}
+
 async function ask(initial,value){return getReply("Test",company,[],initial,undefined,false,async request=>answer(request,value),false,{oilPriceMemory:renderAutomaticOilQuotes(company,initial).records});}
 function out(){return Object.assign(new EventEmitter(),{locals:{},destroyed:false,writableEnded:false,code:200,cookie(){},set(){return this;},status(code){this.code=code;return this;},json(body){this.body=body;return this;}});}
 

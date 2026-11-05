@@ -1,17 +1,17 @@
+import { createOilServiceIntake } from "../fixtures/intake.mjs";
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {emptyIntakeState,missingIntakeFields,normalizeIntakeState} from '../../intake.mjs';
+import {missingIntakeFields,normalizeIntakeState} from '../../intake.mjs';
 import {readyToSend} from '../../request-flow.mjs';
 import {describeParts} from '../../parts-supply.mjs';
-const company=JSON.parse(readFileSync(new URL('../../company.json',import.meta.url),'utf8'));
+const company = createTestCompany();
 function full(overrides={engineOil:true,oilFilter:true},work='Výměna motorového oleje a olejového filtru',option='engine_oil') {
- const state=emptyIntakeState();
- Object.assign(state,{intent:'service_request',selectedOperations:['oil_filters:'+option],serviceId:'oil_filters',serviceOptionId:option,requestedWork:work,customerParts:null,oilFilterScopeReviewed:true,additionalServicesReviewed:true,preferredTime:'2099-10-26'});
- Object.assign(state.partsOverrides,overrides);
- Object.assign(state.vehicle,{brand:'Test',model:'Test',year:'2018',engine:'1.4 l',fuel:'benzín'});
- Object.assign(state.customer,{name:'Test',email:'test@example.com'});
- return normalizeIntakeState(state,company);
+  return normalizeIntakeState(createOilServiceIntake({
+    selectedOperations: ["oil_filters:" + option], serviceOptionId: option,
+    requestedWork: work, customerParts: null, partsOverrides: overrides,
+    vehicle: { brand: "Test", model: "Test" },
+  }), company);
 }
 for(const oil of [true,false])for(const filter of [true,false])test(`oil/filter sources suffice without general default (${oil}/${filter})`,()=>{
  const state=full({engineOil:oil,oilFilter:filter});

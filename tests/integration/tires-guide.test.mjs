@@ -1,6 +1,6 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { tiresGuide } from "../../guides/tires.mjs";
 import { buildInstructions } from "../../instructions.mjs";
@@ -11,7 +11,7 @@ import { readyToSend, presentRequestStep } from "../../request-flow.mjs";
 import { createChatHandler, createSessionHandler } from "../../chat-route.mjs";
 import { createChatSessionStore } from "../../chat-session.mjs";
 import { createRepository } from "../../storage.mjs";
-const company = JSON.parse(readFileSync(new URL("../../company.json", import.meta.url), "utf8"));
+const company = createTestCompany();
 
 function draft(includeTires = true) {
   const state = emptyIntakeState();

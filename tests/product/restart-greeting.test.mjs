@@ -1,12 +1,12 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {readFileSync} from 'node:fs';
 import {createRepository} from '../../storage.mjs';
 import {createChatSessionStore,prepareConfirmation} from '../../chat-session.mjs';
 import {createSessionHandler,createChatHandler} from '../../chat-route.mjs';
 import {previousSentRequest,chatSessionSnapshot} from '../../pending-chat.mjs';
-const company=JSON.parse(readFileSync(new URL('../../company.json',import.meta.url),'utf8'));
+const company = createTestCompany();
 function response(){const res=new EventEmitter();res.code=200;res.cookie=()=>{};res.set=()=>res;res.status=code=>(res.code=code,res);res.json=body=>(res.body=body,res.writableEnded=true,res);return res;}
 function harness(status){
  const repo=createRepository();

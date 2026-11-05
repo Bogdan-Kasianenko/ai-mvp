@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "start": "node --env-file-if-exists=.env app.mjs",
-    "test": "node --test"
+    "test": "node --test tests/product/*.test.mjs tests/safety/*.test.mjs tests/integration/*.test.mjs tests/browser/*.test.mjs tests/compatibility/*.test.mjs",
+    "test:browser": "node --test tests/browser/*.test.mjs",
+    "eval": "node tests/evals/run.mjs"
   },
   "engines": {
     "node": ">=22.13"

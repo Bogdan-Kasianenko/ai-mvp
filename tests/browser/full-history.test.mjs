@@ -1,3 +1,4 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
@@ -6,7 +7,7 @@ import vm from 'node:vm';
 import {createChatHandler,createSessionHandler} from '../../chat-route.mjs';
 import {emptyIntakeState} from '../../intake.mjs';
 import {createRepository} from '../../storage.mjs';
-const company=JSON.parse(readFileSync(new URL('../../company.json',import.meta.url),'utf8'));
+const company = createTestCompany();
 const response=()=>Object.assign(new EventEmitter(),{locals:{},writableEnded:false,json(body){this.body=body;return this;},status(code){this.code=code;return this;},set(){}});
 for(const size of [50,1200])test('full transcript survives replies and session restoration with '+size+' characters per message',async()=>{
  const repository=createRepository();

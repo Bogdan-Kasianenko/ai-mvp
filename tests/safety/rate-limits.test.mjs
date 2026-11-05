@@ -1,14 +1,13 @@
+import { temporaryRepository } from "../helpers/temporary-repository.mjs";
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { createRepository } from "../../storage.mjs";
 import { createChatSessionStore } from "../../chat-session.mjs";
 import { createChatHandler } from "../../chat-route.mjs";
 
-const company = JSON.parse(readFileSync(new URL("../../company.json", import.meta.url), "utf8"));
+const company = createTestCompany();
 function harness(repo) {
   let calls = 0;
   let behavior = async () => ({ kind: "unavailable" });
@@ -41,8 +40,7 @@ function harness(repo) {
 }
 
 test("chat IP quota is shared across existing cookies and persists after repository restart", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "caro-rate-"));
-  const path = join(dir, "test.sqlite");
+  const database = temporaryRepository(); const { path } = database;
   let repo = createRepository(path);
   try {
     let h = harness(repo);
@@ -63,7 +61,7 @@ test("chat IP quota is shared across existing cookies and persists after reposit
     assert.equal(h.calls, 0);
     assert.notEqual((await h.call("different-ip", first.id)).code, 429);
     assert.equal(h.calls, 1);
-  } finally { repo.close(); rmSync(dir, { recursive: true, force: true }); }
+  } finally { repo.close(); database.remove(); }
 });
 
 test("global quota blocks the 121st model call across different IPs", async () => {

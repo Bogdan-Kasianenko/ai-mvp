@@ -1,7 +1,8 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { readFileSync, mkdtempSync, existsSync, unlinkSync, rmdirSync } from "node:fs";
+import { mkdtempSync, existsSync, unlinkSync, rmdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { respondWithGuides } from "../../guides/guide-tools.mjs";
@@ -14,7 +15,7 @@ import { createChatHandler, createSessionHandler } from "../../chat-route.mjs";
 import { createChatSessionStore } from "../../chat-session.mjs";
 import { createRepository } from "../../storage.mjs";
 
-const company = JSON.parse(readFileSync(new URL("../../company.json", import.meta.url), "utf8"));
+const company = createTestCompany();
 const instructionsForGuides = ids => buildInstructions({
   company, priceBooks: {}, currentPragueDate: "27. října 2026",
   requestAlreadySent: false, awaitingSendConfirmation: false,

@@ -1,13 +1,15 @@
+import { fakeModelResponse as modelResponse } from "../helpers/fake-model.mjs";
+import { createModelResponse } from "../fixtures/model-response.mjs";
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { getReply } from "../../service.mjs";
 import { emptyIntakeState, validateModelResponse } from "../../intake.mjs";
 import { createChatHandler, createSessionHandler } from "../../chat-route.mjs";
 import { createChatSessionStore } from "../../chat-session.mjs";
 import { createRepository } from "../../storage.mjs";
-const company=JSON.parse(readFileSync(new URL("../../company.json",import.meta.url),"utf8"));
+const company = createTestCompany();
 function state(){
  const intake=emptyIntakeState();
  Object.assign(intake,{intent:"service_request",selectedOperations:["tires:seasonal_tires"],serviceId:"tires",serviceOptionId:"seasonal_tires",requestedWork:"Přezutí dvou pneumatik",customerParts:false});
@@ -15,14 +17,9 @@ function state(){
  return intake;
 }
 function payload(next,action="keep",extra={}){
- return {safetyWarning:"",reply:"Jasně.",language:"cs",priceQuoted:false,replyLead: "", tireUpdate: {reset:false,fields:[]}, operationsAction: "replace", vehicleAction:action, vehicleFields: [],partsAction:"keep",oilPriceMode:"none",oilPriceRequests:[],tirePriceRequest:null,oilPriceFollowUp:"",keepClosedDay:false,needsClarification:false,statusFollowUp:"",intake:structuredClone(next),submissionAction:"none",...extra};
+  return createModelResponse(next, { vehicleAction: action, ...extra });
 }
-function modelResponse(request,data){
- const value=structuredClone(data);
- const actions=request.text.format.schema.properties.guideActions?.properties;
- if(actions)value.guideActions=Object.fromEntries(Object.keys(actions).map(id=>[id,"keep"]));
- return {status:"completed",output:[],output_text:JSON.stringify(value)};
-}
+
 const ask=(initial,data,message="Přidejte výměnu oleje")=>getReply(message,company,[],initial,undefined,false,async request=>modelResponse(request,data));
 function addOil(initial){
  const next=structuredClone(initial);

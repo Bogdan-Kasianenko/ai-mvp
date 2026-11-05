@@ -1,6 +1,6 @@
+import { startHttpServer } from "../helpers/http-server.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {once} from 'node:events';
 import {APIConnectionTimeoutError} from 'openai';
 import {createApp} from '../../app.mjs';
 import {createChatSessionStore} from '../../chat-session.mjs';
@@ -36,8 +36,8 @@ test('HTTP errors, restoration and browser fallback messages follow the conversa
       return {kind:'reply',text:'Test reply',intake,language:message,submissionAction:'none'};
     }},sessionOptions:{getSession:store}
   });
-  const server=app.listen(0,'127.0.0.1');await once(server,'listening');
-  const url='http://127.0.0.1:'+server.address().port;let cookie;
+  const server = await startHttpServer(app);
+  const { url } = server;let cookie;
   async function call(path,{body,raw,headers={}}={}) {
     const response=await fetch(url+path,{
       method:body!==undefined||raw!==undefined?'POST':'GET',
@@ -74,5 +74,5 @@ test('HTTP errors, restoration and browser fallback messages follow the conversa
         assert.equal(result.data.error,m[key],language+': '+key);
       }
     }
-  } finally {server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+  } finally {await server.close();}
 });

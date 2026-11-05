@@ -1,12 +1,13 @@
+import { createModelResponse } from "../fixtures/model-response.mjs";
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { oilFiltersGuide } from "../../guides/oil-filters.mjs";
 import { tiresGuide } from "../../guides/tires.mjs";
 import { buildInstructions } from "../../instructions.mjs";
 import { getReply } from "../../service.mjs";
 import { emptyIntakeState } from "../../intake.mjs";
-const company=JSON.parse(readFileSync(new URL("../../company.json",import.meta.url),"utf8"));
+const company = createTestCompany();
 function state(operations=["oil_filters:engine_oil"]){
  const intake=emptyIntakeState();
  Object.assign(intake,{intent:"service_request",selectedOperations:operations,customerParts:false,oilFilterScopeReviewed:true,serviceId:"oil_filters",serviceOptionId:"engine_oil",requestedWork:"Výměna oleje a olejového filtru"});
@@ -14,7 +15,7 @@ function state(operations=["oil_filters:engine_oil"]){
  return intake;
 }
 function answer(request,intake,overrides={}){
- const value={safetyWarning:"",reply:"Jasně.",language:"cs",priceQuoted:false,replyLead: "", tireUpdate: {reset:false,fields:[]}, operationsAction: "replace", vehicleAction: "keep", vehicleFields: [], partsAction:"keep",oilPriceMode:"none",oilPriceRequests:[],tirePriceRequest:null,oilPriceFollowUp:"",keepClosedDay:false,needsClarification:false,statusFollowUp:"",intake:structuredClone(intake),submissionAction:"none",...overrides};
+ const value=createModelResponse(intake, overrides);
  const actions=request.text.format.schema.properties.guideActions?.properties;
  if(actions)value.guideActions=Object.fromEntries(Object.keys(actions).map(id=>[id,"keep"]));
  return {status:"completed",output:[],output_text:JSON.stringify(value)};

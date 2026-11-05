@@ -1,12 +1,12 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
-import {readFileSync} from 'node:fs';
 import {emptyIntakeState} from '../../intake.mjs';
 import {createChatHandler} from '../../chat-route.mjs';
 import {prepareConfirmation} from '../../chat-session.mjs';
 import {appointmentIssueMessage} from '../../appointment-calendar.mjs';
-const company=JSON.parse(readFileSync(new URL('../../company.json',import.meta.url),'utf8'));
+const company = createTestCompany();
 function complete(date){
  const state=emptyIntakeState();
  Object.assign(state,{intent:'service_request', selectedOperations: ["oil_filters:engine_oil"], serviceId:'oil_filters',serviceOptionId:'engine_oil',requestedWork:'Výměna oleje a filtru',customerParts:true,oilFilterScopeReviewed:true,additionalServicesReviewed:true,preferredTime:date});

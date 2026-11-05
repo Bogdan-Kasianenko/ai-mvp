@@ -1,10 +1,10 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { emptyIntakeState } from "../../intake.mjs";
 import { renderAutomaticOilQuotes, renderOilQuotes } from "../../oil-quotes.mjs";
 import { getReply } from "../../service.mjs";
-const company = JSON.parse(readFileSync(new URL("../../company.json", import.meta.url), "utf8"));
+const company = createTestCompany();
 const ids = ["engine_oil", "air_filter", "cabin_filter", "fuel_filter", "lpg_filter"];
 const requests = ids.map((optionId) => ({ optionId, source: "selected" }));
 function state(base = false, ownOil = true) {

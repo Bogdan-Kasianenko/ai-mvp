@@ -1,25 +1,23 @@
+import { fakeModelResponse as response } from "../helpers/fake-model.mjs";
+import { createModelResponse } from "../fixtures/model-response.mjs";
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { getReply } from "../../service.mjs";
 import { emptyIntakeState } from "../../intake.mjs";
 import { createChatHandler, createSessionHandler } from "../../chat-route.mjs";
 import { createChatSessionStore } from "../../chat-session.mjs";
 import { createRepository } from "../../storage.mjs";
-const company=JSON.parse(readFileSync(new URL("../../company.json",import.meta.url),"utf8"));
+const company = createTestCompany();
 function state(){
  const intake=emptyIntakeState();Object.assign(intake,{intent:"service_request",selectedOperations:["oil_filters:engine_oil","tires:seasonal_tires"],serviceId:"oil_filters",serviceOptionId:"engine_oil",customerParts:false,oilFilterScopeReviewed:true,requestedWork:"Výměna oleje a přezutí dvou pneumatik"});
  Object.assign(intake.vehicle,{brand:"Rolls-Royce",model:"Cullinan",year:"2019"});intake.tires={optionId:"seasonal_tires",quantity:2,rimDiameter:16,material:"unknown"};return intake;
 }
 function payload(intake,extra={}){
- return {safetyWarning:"",reply:"Jaké jméno mám uvést?",language:"cs",priceQuoted:false,replyLead: "", tireUpdate: {reset:false,fields:[]}, operationsAction: "replace", vehicleAction:"keep", vehicleFields: [],partsAction:"keep",oilPriceMode:"none",oilPriceRequests:[],tirePriceRequest:null,oilPriceFollowUp:"",keepClosedDay:false,needsClarification:false,statusFollowUp:"",intake:structuredClone(intake),submissionAction:"none",...extra};
+  return createModelResponse(intake, { reply: "Jaké jméno mám uvést?", ...extra });
 }
-function response(request,data){
- const value=structuredClone(data),actions=request.text.format.schema.properties.guideActions?.properties;
- if(actions)value.guideActions=Object.fromEntries(Object.keys(actions).map(id=>[id,"keep"]));
- return {status:"completed",output:[],output_text:JSON.stringify(value)};
-}
+
 const ask=(initial,value,context={},sent=false)=>getReply("1,3 benzin",company,[],initial,undefined,sent,async request=>response(request,value),false,context);
 
 test("service supplies the omitted oil price after engine input and places the question below it",async()=>{

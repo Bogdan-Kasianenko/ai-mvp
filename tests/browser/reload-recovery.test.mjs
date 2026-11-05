@@ -1,3 +1,5 @@
+import { startHttpServer } from "../helpers/http-server.mjs";
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
@@ -9,9 +11,8 @@ import {beginPendingChat} from '../../pending-chat.mjs';
 import {handleSendConfirmation} from '../../request-flow.mjs';
 import {emptyIntakeState} from '../../intake.mjs';
 import {createApp} from '../../app.mjs';
-import {once} from 'node:events';
 import vm from 'node:vm';
-const company=JSON.parse(readFileSync(new URL('../../company.json',import.meta.url),'utf8'));
+const company = createTestCompany();
 function response(){return Object.assign(new EventEmitter(),{locals:{},writableEnded:false,destroyed:false,cookie(){},set(){},json(body){this.body=body;return this;},status(code){this.code=code;return this;}});}
 function deferred(){let resolve;const promise=new Promise(r=>resolve=r);return{promise,resolve};}
 function harness(){
@@ -93,7 +94,8 @@ test('disconnect after explicit send consent cannot duplicate delivery',async()=
 test('aborting a real HTTP connection still produces one saved answer',async()=>{
  const store=createChatSessionStore();const started=deferred(),finish=deferred();let calls=0;
  const app=createApp({chatOptions:{getSession:store,replyToMessage:async(_m,_c,_h,intake)=>{calls++;started.resolve();await finish.promise;return{kind:'reply',text:'Recovered over HTTP',intake,language:'cs',submissionAction:'none'};},sendConfirmation:()=>{throw Error('No mail');}},sessionOptions:{getSession:store}});
- const server=app.listen(0,'127.0.0.1');await once(server,'listening');const url='http://127.0.0.1:'+server.address().port;
+ const server = await startHttpServer(app);
+  const { url } = server;
  try{
   const initial=await fetch(url+'/api/session');const cookie=initial.headers.get('set-cookie').split(';')[0];
   const controller=new AbortController();
@@ -108,7 +110,7 @@ test('aborting a real HTTP connection still produces one saved answer',async()=>
     await new Promise(resolve=>setTimeout(resolve,5));
   }
   assert.equal(complete.pendingRequest,null);assert.equal(complete.history.length,2);assert.equal(complete.history[1].content,'Recovered over HTTP');assert.equal(calls,1);
- }finally{finish.resolve();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+ }finally{finish.resolve();await server.close();}
 });
 
 function browserHarness(){

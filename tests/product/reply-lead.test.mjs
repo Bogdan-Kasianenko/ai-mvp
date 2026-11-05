@@ -1,10 +1,10 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { getReply } from "../../service.mjs";
 import { emptyIntakeState, validateModelResponse } from "../../intake.mjs";
 
-const company=JSON.parse(readFileSync(new URL("../../company.json",import.meta.url),"utf8"));
+const company = createTestCompany();
 function state(){
  const value=emptyIntakeState();
  Object.assign(value,{intent:"service_request",selectedOperations:["oil_filters:engine_oil","tires:seasonal_tires"],serviceId:"oil_filters",serviceOptionId:"engine_oil",customerParts:false,oilFilterScopeReviewed:true});

@@ -1,8 +1,7 @@
+import { temporaryRepository } from "../helpers/temporary-repository.mjs";
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync,mkdtempSync,rmSync} from 'node:fs';
-import {join} from 'node:path';
-import {tmpdir} from 'node:os';
 import {DatabaseSync} from 'node:sqlite';
 import {EventEmitter} from 'node:events';
 import {createRepository} from '../../storage.mjs';
@@ -48,16 +47,16 @@ test('window boundaries retain the longer quota without charging the shorter one
  }finally{repo.close();}
 });
 test('an insertion failure rolls back every quota charge',()=>{
- const dir=mkdtempSync(join(tmpdir(),'caro-atomic-'));const path=join(dir,'test.sqlite');
+ const database = temporaryRepository(); const { path } = database;
  const repo=createRepository(path);const db=new DatabaseSync(path);
  try{
   db.exec("CREATE TRIGGER fail_second_quota BEFORE INSERT ON attempts WHEN NEW.bucket='second' BEGIN SELECT RAISE(ABORT,'quota test failure'); END;");
   assert.throws(()=>repo.allowMany([rule('first'),rule('second')]),/quota test failure/);
   assert.equal(repo.allow('first',1,60000),true);
- }finally{db.close();repo.close();rmSync(dir,{recursive:true,force:true});}
+ }finally{db.close();repo.close();database.remove();}
 });
 test('grouped quota charges are shared across connections and survive reopening',()=>{
- const dir=mkdtempSync(join(tmpdir(),'caro-atomic-shared-'));const path=join(dir,'test.sqlite');
+ const database = temporaryRepository(); const { path } = database;
  let first=createRepository(path);const second=createRepository(path);
  try{
   assert.equal(first.allowMany([rule('ip-one'),rule('global')]),true);
@@ -65,7 +64,7 @@ test('grouped quota charges are shared across connections and survive reopening'
   assert.equal(second.allow('ip-two',1,60000),true);
   first.close();first=createRepository(path);
   assert.equal(first.allow('global',1,60000),false);
- }finally{first.close();second.close();rmSync(dir,{recursive:true,force:true});}
+ }finally{first.close();second.close();database.remove();}
 });
 
 for(const [name,suffix,limit,windowMs] of [['hour','hour',60,3600000],['day','day',200,86400000]])test('sources over the '+name+' quota cannot exhaust new visitors global session budget',()=>{
@@ -88,7 +87,7 @@ test('chat global rejection leaves a visitor quota untouched and never invokes t
   const store=createChatSessionStore({repository:repo});
   const session=store({headers:{},ip:'visitor'},response());
   for(let n=0;n<120;n++)assert.equal(repo.allow('chat-global',120,60000),true);
-  const company=JSON.parse(readFileSync(new URL('../../company.json',import.meta.url),'utf8'));
+  const company = createTestCompany();
   const handler=createChatHandler({getSession:store,loadCompanyData:async()=>company,replyToMessage:async()=>{calls++;return{kind:'unavailable'};},sendConfirmation:()=>{throw Error('No mail expected');}});
   const out=response();await handler({headers:{cookie:'caro_session='+session.id},ip:'visitor',body:{message:'Dotaz'}},out);
   assert.equal(out.code,429);assert.equal(calls,0);

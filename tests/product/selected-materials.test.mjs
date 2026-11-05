@@ -1,19 +1,16 @@
+import { createOilServiceIntake } from "../fixtures/intake.mjs";
+import { createTestCompany } from "../fixtures/company.mjs";
 import { withGuideActions } from "../helpers/model-response.mjs";
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
-import {emptyIntakeState,normalizeIntakeState,missingIntakeFields} from '../../intake.mjs';
+import {normalizeIntakeState,missingIntakeFields} from '../../intake.mjs';
 import {readyToSend,presentRequestStep} from '../../request-flow.mjs';
 import {buildRequestEmail} from '../../mailer.mjs';
 import {draftFingerprint} from '../../chat-session.mjs';
 import {getReply} from '../../service.mjs';
-const company=JSON.parse(readFileSync(new URL('../../company.json',import.meta.url),'utf8'));
+const company = createTestCompany();
 function full(){
- const state=emptyIntakeState();
- Object.assign(state,{intent:'service_request',selectedOperations:['oil_filters:engine_oil'],serviceId:'oil_filters',serviceOptionId:'engine_oil',requestedWork:'Výměna oleje a olejového filtru',customerParts:false,oilFilterScopeReviewed:true,additionalServicesReviewed:true,preferredTime:'2099-10-26'});
- Object.assign(state.vehicle,{brand:'Suzuki',model:'Swift',year:'2018',engine:'1.4 l',fuel:'benzín'});
- Object.assign(state.customer,{name:'Test',email:'test@example.com'});
- return state;
+  return createOilServiceIntake();
 }
 test('added oil change requires engine details regardless of the main service',()=>{
  const state=full();state.serviceOptionId='air_filter';

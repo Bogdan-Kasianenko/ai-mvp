@@ -1,9 +1,9 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { resolveTireQuote } from "../../tire-prices.mjs";
 
-const company = JSON.parse(readFileSync(new URL("../../company.json", import.meta.url), "utf8"));
+const company = createTestCompany();
 const request = (overrides = {}) => ({
   optionId: "seasonal_tires", quantity: 2, rimDiameter: 16,
   material: "unknown", ...overrides,

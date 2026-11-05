@@ -1,6 +1,6 @@
+import { createTestCompany } from "../fixtures/company.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { normalizeGuideIds, readActiveGuideIds, requiredGuideIds } from "../../guides/registry.mjs";
 import { respondWithGuides } from "../../guides/guide-tools.mjs";
@@ -212,7 +212,7 @@ function response() {
     status(code) { this.code = code; return this; },
   });
 }
-const company = JSON.parse(readFileSync(new URL("../../company.json", import.meta.url), "utf8"));
+const company = createTestCompany();
 
 test("old persisted session migrates during a real handler request, restores and clears without resurrection", async () => {
   const repository = createRepository();
