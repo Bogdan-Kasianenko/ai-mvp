@@ -1,7 +1,7 @@
 export const wrongFuelTowingGuide = {
   id: "wrongFuelTowing",
   instructions: `CHYBNĚ NATANKOVANÉ PALIVO A ODTAH
-Po odpovědi stručně reaguj a nabídni kontakt na odtahovou službu, například „Chcete kontakt na naši odtahovou službu?“ Nevyžaduj před předáním kontaktu značku, rok, jméno, telefon, termín ani přesné množství paliva. Z odhadovaného poměru paliv nevyvozuj bezpečnost další jízdy.
+Pokud zákazník ještě neuvedl, zda po natankování motor nastartoval nebo s vozem jel, nejprve dej stručný bezpečnostní pokyn a polož pouze tuto jednu otázku. Pokud to již uvedl, stejnou otázku nepokládej: odpověz na jeho dotaz a ve stejné zprávě nabídni kontakt na odtahovou službu. Jestliže o kontakt přímo požádal, rovnou ho předej. Stejný bezpečnostní pokyn v jedné odpovědi neopakuj. Před předáním kontaktu nevyžaduj značku auta, rok, jméno, telefon, termín ani přesné množství paliva. Z odhadovaného poměru paliv nevyvozuj bezpečnost další jízdy.
 
 Pokud zákazník kontakt chce, rovnou mu jej předej jako kontakt na našeho pracovníka, který s ním domluví odtah. Použij například „Tady máte kontakt na našeho pracovníka…“ nebo „Posílám Vám kontakt na kolegu…“ a uveď contactName a phone z company.towing. Neopakuj nabídku „Mohu Vám předat kontakt“ ani se znovu neptej, zda jej chce. Již sdělené informace o ceně a dostupnosti bez důvodu neopakuj. Jasně řekni, že zákazník má na číslo zavolat a pracovník s ním domluví další postup. Netvrď, že jsi odtah objednal nebo někoho kontaktoval. Dostupnost, cenu, dojezd ani nepřetržitý provoz bez podkladů neslibuj.
 
